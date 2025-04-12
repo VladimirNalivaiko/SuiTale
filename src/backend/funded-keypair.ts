@@ -3,28 +3,32 @@ import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 import { MIST_PER_SUI, parseStructTag } from '@mysten/sui/utils';
-import {TESTNET_WALRUS_PACKAGE_CONFIG} from "./constants";
+import { TESTNET_WALRUS_PACKAGE_CONFIG } from './constants';
 
 export async function getFundedKeypair() {
     const suiClient = new SuiClient({
         url: getFullnodeUrl('testnet'),
     });
 
-    const keypair = Ed25519Keypair.fromSecretKey(
-        'suiprivkey1qzmcxscyglnl9hnq82crqsuns0q33frkseks5jw0fye3tuh83l7e6ajfhxx',
-    );
+    let privateKey: string =
+        process.env.SUI_PRIVATE_KEY ??
+        (() => {
+            throw new Error('Private key is missed');
+        })();
+
+    const keypair = Ed25519Keypair.fromSecretKey(privateKey);
     console.log(keypair.toSuiAddress());
 
     const balance = await suiClient.getBalance({
         owner: keypair.toSuiAddress(),
     });
 
-    if (BigInt(balance.totalBalance) < MIST_PER_SUI) {
-        await requestSuiFromFaucetV0({
-            host: getFaucetHost('testnet'),
-            recipient: keypair.toSuiAddress(),
-        });
-    }
+    // if (BigInt(balance.totalBalance) < MIST_PER_SUI) {
+    //     await requestSuiFromFaucetV0({
+    //         host: getFaucetHost('testnet'),
+    //         recipient: keypair.toSuiAddress(),
+    //     });
+    // }
 
     const walBalance = await suiClient.getBalance({
         owner: keypair.toSuiAddress(),
@@ -32,7 +36,8 @@ export async function getFundedKeypair() {
     });
     console.log('wal balance:', walBalance.totalBalance);
 
-    if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 2) {
+    // disable for now. replace 2000 with 2
+    if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 2000) {
         const tx = new Transaction();
 
         const exchange = await suiClient.getObject({
