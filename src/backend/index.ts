@@ -1,10 +1,7 @@
 import { getTale, uploadTale } from './walrus';
 import * as path from 'path';
-export {
-    TESTNET_WALRUS_PACKAGE_CONFIG,
-    MAINNET_WALRUS_PACKAGE_CONFIG,
-} from './constants';
 import dotenv from 'dotenv';
+
 dotenv.config();
 
 async function main() {
@@ -12,7 +9,8 @@ async function main() {
     const blobId = await uploadTale(filePath);
     console.log('Uploaded with Blob ID:', blobId);
 
-    let bloadData = await getTale(blobId);
+    const blobData = await getTale(blobId);
+    console.log('Fetched data:', blobData);
 }
 
 main().catch(console.error);

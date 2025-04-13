@@ -1,5 +1,4 @@
 import { getFullnodeUrl, SuiClient } from '@mysten/sui/client';
-import { getFaucetHost, requestSuiFromFaucetV0 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 import { MIST_PER_SUI, parseStructTag } from '@mysten/sui/utils';
@@ -10,41 +9,26 @@ export async function getFundedKeypair() {
         url: getFullnodeUrl('testnet'),
     });
 
-    let privateKey: string =
-        process.env.SUI_PRIVATE_KEY ??
-        (() => {
-            throw new Error('Private key is missed');
-        })();
+    const privateKey = process.env.SUI_PRIVATE_KEY;
+    if (!privateKey) {
+        throw new Error('SUI_PRIVATE_KEY not set in .env');
+    }
 
     const keypair = Ed25519Keypair.fromSecretKey(privateKey);
-    console.log(keypair.toSuiAddress());
-
-    const balance = await suiClient.getBalance({
-        owner: keypair.toSuiAddress(),
-    });
-
-    // if (BigInt(balance.totalBalance) < MIST_PER_SUI) {
-    //     await requestSuiFromFaucetV0({
-    //         host: getFaucetHost('testnet'),
-    //         recipient: keypair.toSuiAddress(),
-    //     });
-    // }
+    console.log('Sui Address:', keypair.toSuiAddress());
 
     const walBalance = await suiClient.getBalance({
         owner: keypair.toSuiAddress(),
         coinType: `0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL`,
     });
-    console.log('wal balance:', walBalance.totalBalance);
+    console.log('WAL balance:', walBalance.totalBalance);
 
-    // disable for now. replace 2000 with 2
-    if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 2000) {
+    if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 1000) {
         const tx = new Transaction();
 
         const exchange = await suiClient.getObject({
             id: TESTNET_WALRUS_PACKAGE_CONFIG.exchangeIds[0],
-            options: {
-                showType: true,
-            },
+            options: { showType: true },
         });
 
         const exchangePackageId = parseStructTag(exchange.data?.type!).address;
@@ -56,6 +40,7 @@ export async function getFundedKeypair() {
             arguments: [
                 tx.object(TESTNET_WALRUS_PACKAGE_CONFIG.exchangeIds[0]),
                 coinWithBalance({
+                    type: '0x2::sui::SUI',
                     balance: MIST_PER_SUI / 2n,
                 }),
             ],
@@ -63,19 +48,13 @@ export async function getFundedKeypair() {
 
         tx.transferObjects([wal], keypair.toSuiAddress());
 
-        const { digest } = await suiClient.signAndExecuteTransaction({
+        const result = await suiClient.signAndExecuteTransaction({
             transaction: tx,
             signer: keypair,
+            options: { showEffects: true },
         });
 
-        const { effects } = await suiClient.waitForTransaction({
-            digest,
-            options: {
-                showEffects: true,
-            },
-        });
-
-        console.log(effects);
+        console.log('Exchange result:', result.effects);
     }
 
     return keypair;

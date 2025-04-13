@@ -1,1 +1,2 @@
-I am on Walrus!
+# My First Tale
+This is a test tale for SuiTale.
