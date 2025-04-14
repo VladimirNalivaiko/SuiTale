@@ -6,7 +6,7 @@ module suitale::publication {
 
     struct Tale has key, store {
         id: UID,
-        blob_id: String, // Blob ID из Walrus
+        blob_id: String,
         title: String,
         author: address,
     }
@@ -22,7 +22,7 @@ module suitale::publication {
     }
 
     public entry fun update_title(tale: &mut Tale, new_title: vector<u8>, ctx: &mut TxContext) {
-        assert!(tale.author == tx_context::sender(ctx), 0); // Только автор может обновить
+        assert!(tale.author == tx_context::sender(ctx), 0);
         tale.title = string::utf8(new_title);
     }
 }

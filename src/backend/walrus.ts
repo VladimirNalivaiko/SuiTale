@@ -9,28 +9,38 @@ const client = new WalrusClient({
 });
 
 export async function uploadTale(filePath: string): Promise<string> {
-    const fileContent = fs.readFileSync(filePath);
-    const keyPair = await getFundedKeypair();
+    try {
+        const fileContent = fs.readFileSync(filePath);
+        const keyPair = await getFundedKeypair();
 
-    console.log('Upload started:');
+        console.log('Upload started:');
 
-    const { blobId } = await client.writeBlob({
-        signer: keyPair,
-        blob: fileContent,
-        deletable: false,
-        epochs: 3,
-    });
+        const { blobId } = await client.writeBlob({
+            signer: keyPair,
+            blob: fileContent,
+            deletable: false,
+            epochs: 3,
+        });
 
-    console.log('Blob ID:', blobId);
-    console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
-    return blobId;
+        console.log('Blob ID:', blobId);
+        console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
+        return blobId;
+    } catch (error) {
+        console.error('Upload failed:', error.message);
+        throw error;
+    }
 }
 
 export async function getTale(blobId: string): Promise<string> {
-    const blobBytes = await client.readBlob({ blobId });
-    const textDecoder = new TextDecoder('utf-8');
-    const resultString = textDecoder.decode(blobBytes);
+    try {
+        const blobBytes = await client.readBlob({ blobId });
+        const textDecoder = new TextDecoder('utf-8');
+        const resultString = textDecoder.decode(blobBytes);
 
-    console.log('Blob content:', resultString);
-    return resultString;
+        console.log('Blob content:', resultString);
+        return resultString;
+    } catch (error) {
+        console.error('Fetch failed:', error.message);
+        throw error;
+    }
 }
