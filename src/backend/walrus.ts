@@ -26,7 +26,9 @@ export async function uploadTale(filePath: string): Promise<string> {
         console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
         return blobId;
     } catch (error) {
-        console.error('Upload failed:', error.message);
+        let message = 'Unknown Error';
+        if (error instanceof Error) message = error.message;
+        console.error('Upload failed:', message);
         throw error;
     }
 }
@@ -40,7 +42,9 @@ export async function getTale(blobId: string): Promise<string> {
         console.log('Blob content:', resultString);
         return resultString;
     } catch (error) {
-        console.error('Fetch failed:', error.message);
+        let message = 'Unknown Error';
+        if (error instanceof Error) message = error.message;
+        console.error('Fetch failed:', message);
         throw error;
     }
 }
