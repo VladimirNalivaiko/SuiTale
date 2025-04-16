@@ -2,33 +2,40 @@ import { WalrusClient } from '@mysten/walrus';
 import { client as suiClient } from './sui';
 import * as fs from 'fs';
 import { getFundedKeypair } from './funded-keypair';
+import { Transaction } from '@mysten/sui/transactions';
 
 const client = new WalrusClient({
     network: 'testnet',
     suiClient,
 });
 
-export async function uploadTale(filePath: string): Promise<string> {
+export async function publishTale(
+    blobId: string,
+    title: string,
+): Promise<string> {
     try {
-        const fileContent = fs.readFileSync(filePath);
-        const keyPair = await getFundedKeypair();
+        const keypair = await getFundedKeypair();
+        const tx = new Transaction();
 
-        console.log('Upload started:');
-
-        const { blobId } = await client.writeBlob({
-            signer: keyPair,
-            blob: fileContent,
-            deletable: false,
-            epochs: 3,
+        tx.moveCall({
+            package: process.env.CONTRACT_ADDRESS_TESTNET as string,
+            module: 'publication',
+            function: 'publish',
+            arguments: [tx.pure(blobId), tx.pure(title)],
         });
 
-        console.log('Blob ID:', blobId);
-        console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
-        return blobId;
+        const result = await suiClient.signAndExecuteTransaction({
+            transaction: tx,
+            signer: keypair,
+            options: { showEffects: true },
+        });
+
+        console.log('Tale published:', result.digest);
+        return result.digest;
     } catch (error) {
         let message = 'Unknown Error';
         if (error instanceof Error) message = error.message;
-        console.error('Upload failed:', message);
+        console.error('Publish failed:', message);
         throw error;
     }
 }
