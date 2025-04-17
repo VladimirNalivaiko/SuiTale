@@ -1,6 +1,5 @@
 import { WalrusClient } from '@mysten/walrus';
 import { client as suiClient } from './sui';
-import * as fs from 'fs';
 import { getFundedKeypair } from './funded-keypair';
 import { Transaction } from '@mysten/sui/transactions';
 
@@ -21,7 +20,7 @@ export async function publishTale(
             package: process.env.CONTRACT_ADDRESS_TESTNET as string,
             module: 'publication',
             function: 'publish',
-            arguments: [tx.pure(blobId), tx.pure(title)],
+            arguments: [tx.pure.string(blobId), tx.pure.string(title)],
         });
 
         const result = await suiClient.signAndExecuteTransaction({
