@@ -2,13 +2,15 @@ import { getTale, uploadTale } from './walrus';
 import { publishTale } from './sui';
 import * as path from 'path';
 import dotenv from 'dotenv';
+import { getFundedKeypair } from './funded-keypair';
 
 dotenv.config();
 
 async function main() {
     try {
         const filePath = path.resolve(__dirname, '../../data/tale.md');
-        const blobId = await uploadTale(filePath);
+        const keypair = await getFundedKeypair();
+        const blobId = await uploadTale(filePath, keypair);
         console.log('Uploaded with Blob ID:', blobId);
 
         const blobData = await getTale(blobId);

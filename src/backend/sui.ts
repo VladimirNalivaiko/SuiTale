@@ -7,16 +7,16 @@ export const suiClient = new SuiClient({
     url: getFullnodeUrl('testnet'),
 });
 
-const client = new WalrusClient({
-    network: 'testnet',
-    suiClient,
-});
-
 export async function publishTale(
     blobId: string,
     title: string,
 ): Promise<string> {
     try {
+        const contractAddress = process.env.CONTRACT_ADDRESS_TESTNET;
+        if (!contractAddress) {
+            throw new Error('CONTRACT_ADDRESS_TESTNET not set in .env');
+        }
+
         const keypair = await getFundedKeypair();
         const tx = new Transaction();
 

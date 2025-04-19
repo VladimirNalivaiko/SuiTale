@@ -1,18 +1,19 @@
 import { WalrusClient } from '@mysten/walrus';
 import { suiClient } from './sui';
 import * as fs from 'fs';
-import { getFundedKeypair } from './funded-keypair';
+import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 const client = new WalrusClient({
     network: 'testnet',
     suiClient,
 });
 
-export async function uploadTale(filePath: string): Promise<string> {
+export async function uploadTale(
+    filePath: string,
+    keyPair: Ed25519Keypair,
+): Promise<string> {
     try {
         const fileContent = fs.readFileSync(filePath);
-        const keyPair = await getFundedKeypair();
-
         console.log('Upload started:');
 
         const { blobId } = await client.writeBlob({
