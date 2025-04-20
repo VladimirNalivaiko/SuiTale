@@ -22,7 +22,7 @@ async function main() {
     } catch (error) {
         let message = 'Unknown Error';
         if (error instanceof Error) message = error.message;
-        console.error('Main failed:', message);
+        console.error('Main failed: ', message);
         throw error;
     }
 }
