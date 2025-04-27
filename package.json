@@ -8,11 +8,17 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.0.2",
+    "@mui/material": "^7.0.2",
     "@mysten/sui": "^1.26.1",
     "@mysten/walrus": "^0.0.13",
+    "@types/styled-components": "^5.1.34",
     "dotenv": "^16.5.0",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "styled-components": "^6.1.17"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

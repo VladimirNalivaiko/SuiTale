@@ -139,3 +139,4 @@ dist
 .idea
 
 /contracts/build
+.DS_Store
