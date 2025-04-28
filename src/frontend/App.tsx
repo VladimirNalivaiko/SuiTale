@@ -1,17 +1,42 @@
 import React from 'react';
-import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { ThemeProvider } from '@mui/material/styles';
 import { ThemeProvider as StyledThemeProvider } from 'styled-components';
 import { theme } from './styles/theme';
-import Router from './components/Router';
+import { Header } from './components/Header';
+import { Hero } from './components/Hero';
+import { PopularStories } from './components/PopularStories';
+import { HowItWorks } from './components/HowItWorks';
+import { FeaturedAuthors } from './components/FeaturedAuthors';
+import { Footer } from './components/Footer';
+import StoriesPage from './pages/Stories/StoriesPage';
+import CreateStoryPage from './pages/CreateStory/CreateStoryPage';
+import ProfilePage from './pages/Profile/ProfilePage';
 
-function App() {
+const App: React.FC = () => {
   return (
-    <MuiThemeProvider theme={theme}>
+    <ThemeProvider theme={theme}>
       <StyledThemeProvider theme={theme}>
-        <Router />
+        <Router>
+          <Header />
+          <Routes>
+            <Route path="/" element={
+              <>
+                <Hero />
+                <PopularStories />
+                <HowItWorks />
+                <FeaturedAuthors />
+              </>
+            } />
+            <Route path="/stories" element={<StoriesPage />} />
+            <Route path="/create-story" element={<CreateStoryPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+          </Routes>
+          <Footer />
+        </Router>
       </StyledThemeProvider>
-    </MuiThemeProvider>
+    </ThemeProvider>
   );
-}
+};
 
 export default App;
