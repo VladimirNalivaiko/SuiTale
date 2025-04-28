@@ -9,9 +9,7 @@ import { PopularStories } from './components/PopularStories';
 import { HowItWorks } from './components/HowItWorks';
 import { FeaturedAuthors } from './components/FeaturedAuthors';
 import { Footer } from './components/Footer';
-import StoriesPage from './pages/Stories/StoriesPage';
-import CreateStoryPage from './pages/CreateStory/CreateStoryPage';
-import ProfilePage from './pages/Profile/ProfilePage';
+import { StoriesPage, CreateStoryPage, ProfilePage } from './pages';
 
 const App: React.FC = () => {
   return (
