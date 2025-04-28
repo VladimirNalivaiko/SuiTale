@@ -4,10 +4,10 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
-  root: 'src/frontend',
-  publicDir: '../../public',
+  root: '.',
+  publicDir: '../public',
   build: {
-    outDir: '../../dist/frontend',
+    outDir: '../dist',
     emptyOutDir: true
   },
   server: {
@@ -19,4 +19,4 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src')
     }
   }
-});
+}); 

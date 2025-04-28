@@ -1,59 +1,31 @@
-import { createBrowserRouter, Navigate } from 'react-router-dom';
+import React from 'react';
+import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { ROUTES } from './types/constants';
-import RouteAccessChecker from './components/RouteAccessChecker';
-import { StoriesPage, CreateStoryPage, ProfilePage } from './pages';
-import { Header, Footer, Hero, PopularStories, HowItWorks, FeaturedAuthors } from './components';
+import { Header } from './components/Header';
+import { Hero } from './components/Hero';
+import { PopularStories } from './components/PopularStories';
+import { HowItWorks } from './components/HowItWorks';
+import { FeaturedAuthors } from './components/FeaturedAuthors';
+import { Footer } from './components/Footer';
 
 const router = createBrowserRouter([
     {
-        element: <RouteAccessChecker />,
         path: ROUTES.INITIAL_ROUTE,
-        children: [
-            {
-                index: true,
-                element: (
-                    <>
-                        <Header />
-                        <Hero />
-                        <PopularStories />
-                        <HowItWorks />
-                        <FeaturedAuthors />
-                        <Footer />
-                    </>
-                ),
-            },
-            {
-                path: ROUTES.STORIES,
-                element: (
-                    <>
-                        <Header />
-                        <StoriesPage />
-                        <Footer />
-                    </>
-                ),
-            },
-            {
-                path: ROUTES.CREATE_STORY,
-                element: (
-                    <>
-                        <Header />
-                        <CreateStoryPage />
-                        <Footer />
-                    </>
-                ),
-            },
-            {
-                path: ROUTES.PROFILE,
-                element: (
-                    <>
-                        <Header />
-                        <ProfilePage />
-                        <Footer />
-                    </>
-                ),
-            },
-        ],
-    },
+        element: (
+            <>
+                <Header />
+                <Hero />
+                <PopularStories />
+                <HowItWorks />
+                <FeaturedAuthors />
+                <Footer />
+            </>
+        ),
+    }
 ]);
 
-export default router; 
+function Router() {
+    return <RouterProvider router={router} />;
+}
+
+export default Router; 
