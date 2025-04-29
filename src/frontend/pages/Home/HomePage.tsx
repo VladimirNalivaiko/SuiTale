@@ -1,9 +1,6 @@
 import React from 'react';
 import { DefaultLayout } from '../../layouts/DefaultLayout';
-import { Hero } from '../../components/Hero';
-import { PopularStories } from '../../components/PopularStories';
-import { HowItWorks } from '../../components/HowItWorks';
-import { FeaturedAuthors } from '../../components/FeaturedAuthors';
+import { Hero, PopularStories, HowItWorks, FeaturedAuthors } from '../../components';
 
 const HomePage: React.FC = () => {
   return (

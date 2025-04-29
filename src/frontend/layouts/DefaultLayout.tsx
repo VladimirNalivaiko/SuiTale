@@ -1,9 +1,8 @@
-import React, { ReactNode } from 'react';
-import { Header } from '../components/Header';
-import { Footer } from '../components/Footer';
+import React from 'react';
+import { Header, Footer } from '../components';
 
 interface DefaultLayoutProps {
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
 export const DefaultLayout: React.FC<DefaultLayoutProps> = ({ children }) => {

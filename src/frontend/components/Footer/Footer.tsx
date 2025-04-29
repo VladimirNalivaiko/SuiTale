@@ -13,7 +13,6 @@ import {
 import FacebookIcon from '@mui/icons-material/Facebook';
 import InstagramIcon from '@mui/icons-material/Instagram';
 import TwitterIcon from '@mui/icons-material/Twitter';
-import { NavigationLink, ResourceLink } from '../../types';
 import { navigationLinks, resourceLinks } from '../../data';
 
 export const Footer: React.FC = () => {
@@ -112,85 +111,41 @@ export const Footer: React.FC = () => {
             </Stack>
           </Grid>
 
-          {/* Newsletter */}
+          {/* Newsletter Section */}
           <Grid item xs={12} md={3}>
             <Typography variant="subtitle1" gutterBottom>
               Newsletter
             </Typography>
             <Typography variant="body2" sx={{ mb: 2 }}>
-              Stay updated with the latest stories and features
+              Subscribe to our newsletter for updates
             </Typography>
-            <Box sx={{ display: "flex" }}>
+            <Stack direction="row" spacing={1}>
               <TextField
-                variant="outlined"
-                placeholder="Enter your email"
+                placeholder="Your email"
                 size="small"
                 sx={{
                   bgcolor: "rgba(255,255,255,0.1)",
-                  borderRadius: 1,
-                  "& .MuiOutlinedInput-root": {
-                    "& fieldset": {
-                      borderColor: "transparent",
+                  '& .MuiOutlinedInput-root': {
+                    color: 'white',
+                    '& fieldset': {
+                      borderColor: 'rgba(255,255,255,0.2)',
                     },
-                    "&:hover fieldset": {
-                      borderColor: "transparent",
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(255,255,255,0.4)',
                     },
                   },
-                  input: { color: "white" },
-                }}
-                InputProps={{
-                  endAdornment: (
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      size="small"
-                    >
-                      Subscribe
-                    </Button>
-                  ),
                 }}
               />
-            </Box>
+              <Button
+                variant="contained"
+                color="secondary"
+                sx={{ whiteSpace: 'nowrap' }}
+              >
+                Subscribe
+              </Button>
+            </Stack>
           </Grid>
         </Grid>
-
-        {/* Footer Bottom */}
-        <Box
-          sx={{
-            mt: 6,
-            pt: 3,
-            borderTop: "1px solid rgba(255,255,255,0.1)",
-            display: "flex",
-            justifyContent: "space-between",
-          }}
-        >
-          <Typography variant="body2">
-            © 2024 SuiTale. All rights reserved.
-          </Typography>
-          <Stack direction="row" spacing={2}>
-            <Button
-              color="inherit"
-              size="small"
-              sx={{ textTransform: "none" }}
-            >
-              Terms
-            </Button>
-            <Button
-              color="inherit"
-              size="small"
-              sx={{ textTransform: "none" }}
-            >
-              Privacy
-            </Button>
-            <Button
-              color="inherit"
-              size="small"
-              sx={{ textTransform: "none" }}
-            >
-              Contact
-            </Button>
-          </Stack>
-        </Box>
       </Container>
     </Box>
   );

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { ThemeProvider } from '@mui/material/styles';
 import { ThemeProvider as StyledThemeProvider } from 'styled-components';
 import { theme } from './styles/theme';
+import './styles/global.css';
 import Router from './Router';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

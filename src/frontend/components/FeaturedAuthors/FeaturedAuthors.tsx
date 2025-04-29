@@ -1,6 +1,5 @@
 import React from 'react';
 import { Avatar, Box, Button, Card, Container, Grid, Typography } from '@mui/material';
-import { Author } from '../../types';
 import { featuredAuthors } from '../../data';
 
 export const FeaturedAuthors: React.FC = () => {
