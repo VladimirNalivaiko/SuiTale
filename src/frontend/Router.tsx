@@ -7,6 +7,7 @@ import { PopularStories } from './components/PopularStories';
 import { HowItWorks } from './components/HowItWorks';
 import { FeaturedAuthors } from './components/FeaturedAuthors';
 import { Footer } from './components/Footer';
+import { MyProfilePage } from './pages';
 
 const router = createBrowserRouter([
     {
@@ -18,6 +19,16 @@ const router = createBrowserRouter([
                 <PopularStories />
                 <HowItWorks />
                 <FeaturedAuthors />
+                <Footer />
+            </>
+        ),
+    },
+    {
+        path: ROUTES.MY_PROFILE,
+        element: (
+            <>
+                <Header />
+                <MyProfilePage />
                 <Footer />
             </>
         ),

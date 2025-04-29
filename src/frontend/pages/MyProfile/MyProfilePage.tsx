@@ -23,7 +23,7 @@ import {
 } from "@mui/material";
 import React from "react";
 
-const ProfilePage: React.FC = () => {
+const MyProfilePage: React.FC = () => {
   // Analytics data
   const analyticsData = [
     { label: "Total Views", value: "45200", increase: "+12%" },
@@ -582,4 +582,4 @@ const ProfilePage: React.FC = () => {
   );
 };
 
-export default ProfilePage; 
+export default MyProfilePage; 

@@ -2,5 +2,5 @@ export const ROUTES = {
     INITIAL_ROUTE: "/",
     STORIES: "/stories",
     CREATE_STORY: "/create-story",
-    PROFILE: "/profile"
+    MY_PROFILE: "/my-profile"
 }; 
