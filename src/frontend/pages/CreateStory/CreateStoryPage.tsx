@@ -9,8 +9,6 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  FormControlLabel,
-  Switch,
   Card,
   CardContent,
 } from '@mui/material';
@@ -20,13 +18,12 @@ const CreateStoryPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
-  const [isPremium, setIsPremium] = useState(false);
   const [coverImage, setCoverImage] = useState<File | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     // TODO: Implement story creation logic
-    console.log({ title, content, category, isPremium, coverImage });
+    console.log({ title, content, category, coverImage });
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -104,17 +101,6 @@ const CreateStoryPage: React.FC = () => {
                     </Typography>
                   )}
                 </Box>
-
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={isPremium}
-                      onChange={(e) => setIsPremium(e.target.checked)}
-                      color="primary"
-                    />
-                  }
-                  label="Premium Content"
-                />
 
                 <Button
                   type="submit"

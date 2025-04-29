@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { ROUTES } from './types/constants';
-import { HomePage, MyProfilePage } from './pages';
+import { CreateStoryPage, HomePage, MyProfilePage, StoriesPage, UserProfilePage } from './pages';
 
 const router = createBrowserRouter([
     {
@@ -10,9 +10,27 @@ const router = createBrowserRouter([
         ),
     },
     {
+        path: ROUTES.STORIES,
+        element: (
+            <StoriesPage />
+        ),
+    },
+    {
         path: ROUTES.MY_PROFILE,
         element: (
             <MyProfilePage />
+        ),
+    },
+    {
+        path: ROUTES.CREATE_STORY,
+        element: (
+            <CreateStoryPage />
+        ),
+    },
+    {
+        path: ROUTES.USER_PROFILE,
+        element: (
+            <UserProfilePage />
         ),
     }
 ]);

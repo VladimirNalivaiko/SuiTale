@@ -94,14 +94,14 @@ const StoriesPage: React.FC = () => {
                       variant="contained"
                       fullWidth
                       sx={{
-                        bgcolor: story.isPremium ? '#ffd700' : '#4318d1',
-                        color: story.isPremium ? '#000' : '#fff',
+                        bgcolor: '#4318d1',
+                        color: '#fff',
                         '&:hover': {
-                          bgcolor: story.isPremium ? '#ffd700' : '#3a14b8',
+                          bgcolor: '#3a14b8',
                         },
                       }}
                     >
-                      {story.isPremium ? 'Read Premium' : 'Read Story'}
+                      Read Story
                     </Button>
                   </Stack>
                 </CardContent>
