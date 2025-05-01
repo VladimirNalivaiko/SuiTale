@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { ROUTES } from './types/constants';
-import { CreateStoryPage, HomePage, MyProfileOldPage, MyProfilePage, StoriesPage, TalePage, UserProfilePage } from './pages';
+import { CreateStoryPage, HomePage, MyProfilePage, TalePage, UserProfilePage, TalesPage} from './pages';
 
 const router = createBrowserRouter([
     {
@@ -10,9 +10,9 @@ const router = createBrowserRouter([
         ),
     },
     {
-        path: ROUTES.STORIES,
+        path: ROUTES.TALES,
         element: (
-            <StoriesPage />
+            <TalesPage />
         ),
     },
     {
