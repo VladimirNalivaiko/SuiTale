@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography, Grid, Card, CardContent, CardMedia, Button, Stack } from '@mui/material';
-import { DefaultLayout } from '../../layouts/DefaultLayout';
+import { DefaultLayout } from "../../layouts";
 
 const StoriesPage: React.FC = () => {
   // Mock data for stories

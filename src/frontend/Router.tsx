@@ -1,6 +1,6 @@
 import { createBrowserRouter, RouterProvider } from 'react-router-dom';
 import { ROUTES } from './types/constants';
-import { CreateStoryPage, HomePage, MyProfilePage, StoriesPage, UserProfilePage } from './pages';
+import { CreateStoryPage, HomePage, MyProfilePage, StoriesPage, TalePage, UserProfilePage } from './pages';
 
 const router = createBrowserRouter([
     {
@@ -31,6 +31,12 @@ const router = createBrowserRouter([
         path: ROUTES.USER_PROFILE,
         element: (
             <UserProfilePage />
+        ),
+    },
+    {
+        path: ROUTES.TALE,
+        element: (
+            <TalePage />
         ),
     }
 ]);

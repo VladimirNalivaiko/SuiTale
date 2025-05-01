@@ -21,7 +21,7 @@ import {
   Typography,
 } from "@mui/material";
 import React from "react";
-import { DefaultLayout } from "../../layouts/DefaultLayout";
+import { DefaultLayout } from "../../layouts";
 
 const UserProfilePage: React.FC = () => {
   // User profile data

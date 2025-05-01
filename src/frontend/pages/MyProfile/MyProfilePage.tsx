@@ -22,7 +22,7 @@ import {
   Typography,
 } from "@mui/material";
 import React from "react";
-import { DefaultLayout } from "../../layouts/DefaultLayout";
+import { DefaultLayout } from "../../layouts";
 
 const MyProfilePage: React.FC = () => {
   // Analytics data

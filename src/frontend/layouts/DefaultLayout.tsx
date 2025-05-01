@@ -1,18 +1,19 @@
 import React from 'react';
+import { Box } from '@mui/material';
 import { Header, Footer } from '../components';
 
 interface DefaultLayoutProps {
   children: React.ReactNode;
 }
 
-export const DefaultLayout: React.FC<DefaultLayoutProps> = ({ children }) => {
+const DefaultLayout: React.FC<DefaultLayoutProps> = ({ children }) => {
   return (
-    <div className="min-h-screen flex flex-col">
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <Header />
-      <main className="flex-grow">
-        {children}
-      </main>
+      <Box sx={{ flex: 1 }}>{children}</Box>
       <Footer />
-    </div>
+    </Box>
   );
-}; 
+};
+
+export default DefaultLayout;

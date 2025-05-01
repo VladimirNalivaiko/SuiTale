@@ -12,7 +12,7 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
-import { DefaultLayout } from '../../layouts/DefaultLayout';
+import { DefaultLayout } from '../../layouts';
 
 const CreateStoryPage: React.FC = () => {
   const [title, setTitle] = useState('');
