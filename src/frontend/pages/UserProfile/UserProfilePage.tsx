@@ -12,7 +12,6 @@ import {
   Card,
   CardContent,
   CardMedia,
-  Chip,
   Container,
   Grid,
   Stack,

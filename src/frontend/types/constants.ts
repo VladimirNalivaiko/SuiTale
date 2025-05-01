@@ -4,5 +4,5 @@ export const ROUTES = {
     CREATE_STORY: "/create-story",
     MY_PROFILE: "/my-profile",
     USER_PROFILE: "/user/:id",
-    TALE: "/tale/:id"
+    TALE: "/tale/:id",
 }; 
