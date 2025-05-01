@@ -22,7 +22,8 @@ export const earningsItemStyles: SxProps<Theme> = {
   padding: '16px',
   borderRadius: '8px',
   bgcolor: 'background.paper',
-  boxShadow: 1,
+  boxShadow: 2,
+  margin: 1
 };
 
 export const earningsLabelStyles: SxProps<Theme> = {

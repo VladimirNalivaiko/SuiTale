@@ -28,7 +28,7 @@ const ProfileQuickActions: React.FC<ProfileQuickActionsProps> = ({ actions }) =>
         </Typography>
         <Grid container sx={gridContainerStyles}>
           {actions.map((action, index) => (
-            <Grid item xs={12} sm={6} key={index}>
+            <Grid item xs={12} sm={12} md={12} lg={6} xl={6} key={index}>
               <Box sx={actionItemStyles}>
                 <Typography variant="subtitle1" sx={actionTitleStyles}>
                   {action.title}

@@ -13,10 +13,10 @@ export const Hero: React.FC = () => {
     >
       <Container maxWidth="md">
         <Typography variant="h3" component="h1" gutterBottom>
-          Decentralized Stories on SUI Blockchain
+          Decentralized Tales on SUI Blockchain
         </Typography>
         <Typography variant="h6" gutterBottom>
-          Create, publish, and own your stories in Web3
+          Create, publish, and own your tales in Web3
         </Typography>
         <Stack
           direction="row"

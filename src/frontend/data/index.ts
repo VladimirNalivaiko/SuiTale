@@ -1,6 +1,7 @@
-import { Story, Author, HowItWorksStep, NavigationLink, ResourceLink } from '../types';
+import { ROUTES } from "../types/constants";
+import { Tale, Author, HowItWorksStep, NavigationLink, ResourceLink } from '../types';
 
-export const popularStories: Story[] = [
+export const popularTales: Tale[] = [
   {
     id: 1,
     title: "The Digital Renaissance",
@@ -67,10 +68,7 @@ export const howItWorksSteps: HowItWorksStep[] = [
 ];
 
 export const navigationLinks: NavigationLink[] = [
-  { title: "Home", path: "/" },
-  { title: "Popular Stories", path: "/popular" },
-  { title: "New Stories", path: "/new" },
-  { title: "Featured Authors", path: "/authors" },
+  { title: "Home", path: ROUTES.INITIAL_ROUTE },
 ];
 
 export const resourceLinks: ResourceLink[] = [

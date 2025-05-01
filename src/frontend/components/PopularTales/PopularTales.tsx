@@ -1,9 +1,9 @@
 import React from 'react';
 import { Box, Card, CardContent, CardMedia, Container, Grid, Typography } from '@mui/material';
-import { Story } from '../../types';
-import { popularStories } from '../../data';
+import { popularTales } from '../../data';
 
-export const PopularStories: React.FC = () => {
+export const PopularTales: React.FC = () => {
+  const defaultImage = '../../../assets/images/testnetAnnouncement.png';
   return (
     <Box sx={{ bgcolor: "grey.50", py: 8 }}>
       <Container maxWidth="lg">
@@ -14,12 +14,12 @@ export const PopularStories: React.FC = () => {
           gutterBottom
           sx={{ mb: 4 }}
         >
-          Popular Stories
+          Popular Tales
         </Typography>
 
         <Grid container spacing={4}>
-          {popularStories.map((story) => (
-            <Grid item xs={12} md={4} key={story.id} component="div">
+          {popularTales.map((tale) => (
+            <Grid item xs={12} md={4} key={tale.id} component="div">
               <Card
                 sx={{
                   height: "100%",
@@ -31,12 +31,12 @@ export const PopularStories: React.FC = () => {
                 <CardMedia
                   component="img"
                   height="200"
-                  image={story.image}
-                  alt={story.title}
+                  image={defaultImage}
+                  alt={tale.title}
                 />
                 <CardContent>
                   <Typography variant="h6" component="h3" gutterBottom>
-                    {story.title}
+                    {tale.title}
                   </Typography>
                   <Box
                     sx={{
@@ -46,10 +46,10 @@ export const PopularStories: React.FC = () => {
                     }}
                   >
                     <Typography variant="body2" color="text.secondary">
-                      {story.author}
+                      {tale.author}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      {story.reads}
+                      {tale.reads}
                     </Typography>
                   </Box>
                 </CardContent>

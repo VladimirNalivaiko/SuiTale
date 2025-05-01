@@ -16,10 +16,10 @@ interface EarningsItem {
 }
 
 interface ProfileEarningsProps {
-  items: EarningsItem[];
+  earnings: EarningsItem[];
 }
 
-const ProfileEarnings: React.FC<ProfileEarningsProps> = ({ items }) => {
+const ProfileEarnings: React.FC<ProfileEarningsProps> = ({ earnings }) => {
   return (
     <Card sx={cardStyles}>
       <CardContent sx={cardContentStyles}>
@@ -27,8 +27,8 @@ const ProfileEarnings: React.FC<ProfileEarningsProps> = ({ items }) => {
           Earnings
         </Typography>
         <Grid container sx={gridContainerStyles}>
-          {items.map((item, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
+          {earnings.map((item, index) => (
+            <Grid item xs={12} sm={12} md={12} lg={6} xl={4} key={index}>
               <Box sx={earningsItemStyles}>
                 <Typography variant="body2" sx={earningsLabelStyles}>
                   {item.label}

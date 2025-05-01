@@ -12,6 +12,8 @@ import {
 } from '../../components/Profile';
 import AttachMoneyIcon from "@mui/icons-material/AttachMoney";
 import CommentIcon from "@mui/icons-material/Comment";
+import EditIcon from "@mui/icons-material/Edit";
+import NotificationsIcon from "@mui/icons-material/Notifications";
 import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 
 
@@ -19,10 +21,10 @@ import ThumbUpIcon from "@mui/icons-material/ThumbUp";
 const MyProfilePage: React.FC = () => {
   // Analytics data
   const analyticsData = [
-    { label: "Total Views", value: "45200", increase: "+12%" },
-    { label: "Reactions", value: "12400", increase: "+8%" },
-    { label: "Comments", value: "890", increase: "+15%" },
-    { label: "Followers", value: "1234", increase: "+5%" },
+    { label: "Total Views", value: "45200", increase: 12 },
+    { label: "Reactions", value: "12400", increase: 8 },
+    { label: "Comments", value: "890", increase: 15 },
+    { label: "Followers", value: "1234", increase: 5 },
   ];
 
   // Earnings data
@@ -102,7 +104,7 @@ const MyProfilePage: React.FC = () => {
   return (
     <DefaultLayout>
       <Box sx={{ 
-         
+        p: { xs: 2, sm: 3, md: 4 }, 
         bgcolor: '#f7f7ff', 
         minHeight: '100vh',
         mx: 'auto'
@@ -121,18 +123,18 @@ const MyProfilePage: React.FC = () => {
             {/* Left Column */}
             <Grid item xs={12} md={6} lg={6}>
               <Stack spacing={{ xs: 2, sm: 3 }}>
-                <ProfileAnalytics data={analyticsData} />
-                <ProfileEarnings data={earningsData} />
-                <ProfileTransactions data={transactionsData} />
-                <ProfileNotifications data={notificationsData} />
+                <ProfileAnalytics analytics={analyticsData} />
+                <ProfileEarnings earnings={earningsData} />
+                <ProfileTransactions transactions={transactionsData} />
+                <ProfileNotifications notifications={notificationsData} />
               </Stack>
             </Grid>
 
             {/* Right Column */}
             <Grid item xs={12} md={6} lg={6}>
               <Stack spacing={{ xs: 2, sm: 3 }}>
-                <ProfileWritingProjects data={writingProjectsData} />
-                <ProfileQuickActions data={quickActionsData} />
+                <ProfileWritingProjects projects={writingProjectsData} />
+                <ProfileQuickActions actions={quickActionsData} />
               </Stack>
             </Grid>
           </Grid>

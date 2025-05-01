@@ -19,10 +19,10 @@ interface AnalyticsItem {
 }
 
 interface ProfileAnalyticsProps {
-  items: AnalyticsItem[];
+  analytics: AnalyticsItem[];
 }
 
-const ProfileAnalytics: React.FC<ProfileAnalyticsProps> = ({ items }) => {
+const ProfileAnalytics: React.FC<ProfileAnalyticsProps> = ({ analytics }) => {
   return (
     <Card sx={cardStyles}>
       <CardContent sx={cardContentStyles}>
@@ -30,8 +30,8 @@ const ProfileAnalytics: React.FC<ProfileAnalyticsProps> = ({ items }) => {
           Analytics
         </Typography>
         <Grid container sx={gridContainerStyles}>
-          {items.map((item, index) => (
-            <Grid item xs={12} sm={6} md={4} key={index}>
+          {analytics.map((item, index) => (
+            <Grid item xs={12} sm={12}  md={12} lg={6} xl={3} key={index}>
               <Box sx={analyticsItemStyles}>
                 <Typography variant="body2" sx={analyticsLabelStyles}>
                   {item.label}

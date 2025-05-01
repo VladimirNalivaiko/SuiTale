@@ -1,12 +1,12 @@
 import React from 'react';
 import { DefaultLayout } from "../../layouts";
-import { Hero, PopularStories, HowItWorks, FeaturedAuthors } from '../../components';
+import { Hero, PopularTales, HowItWorks, FeaturedAuthors } from '../../components';
 
 const HomePage: React.FC = () => {
   return (
     <DefaultLayout>
       <Hero />
-      <PopularStories />
+      <PopularTales />
       <HowItWorks />
       <FeaturedAuthors />
     </DefaultLayout>

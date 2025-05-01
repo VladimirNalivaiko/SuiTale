@@ -8,27 +8,30 @@ import {
   Stack,
   Toolbar,
   Typography,
-  Menu,
-  MenuItem,
   Drawer,
   List,
   ListItem,
   ListItemText,
 } from '@mui/material';
-import SearchIcon from '@mui/icons-material/Search';
 import MenuIcon from '@mui/icons-material/Menu';
 import SuiTaleIcon from '../../assets/images/SuiTaleIcon.png';
 import { navigationLinks } from '../../data';
+import { generatePath, useNavigate } from "react-router-dom";
 
 export const Header: React.FC = () => {
+  const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const handleMobileMenuOpen = () => {
+  const handleMobileMenuOpen = (event: React.MouseEvent) => {
     setMobileMenuOpen(true);
   };
 
   const handleMobileMenuClose = () => {
     setMobileMenuOpen(false);
+  };
+
+  const handleMenuItemClick = (route: string) => {
+    navigate(generatePath(route));
   };
 
   return (
@@ -47,7 +50,11 @@ export const Header: React.FC = () => {
 
         <Stack direction="row" spacing={3} sx={{ mr: 4, display: { xs: 'none', md: 'flex' }, flexWrap: 'wrap' }}>
           {navigationLinks.map((link) => (
-            <Button key={link.path} color="inherit">
+            <Button 
+              key={link.path} 
+              color="inherit"
+              onClick={() => handleMenuItemClick(link.path)}
+            >
               {link.title}
             </Button>
           ))}
@@ -87,7 +94,7 @@ export const Header: React.FC = () => {
             {navigationLinks.map((link) => (
               <ListItem
                 key={link.path}
-                onClick={handleMobileMenuClose}
+                onClick={() => handleMenuItemClick(link.path)}
                 sx={{
                   py: 2,
                   px: 3,

@@ -9,7 +9,6 @@ import {
   projectTitleStyles,
   lastEditedStyles,
   progressBarStyles,
-  progressBarRootStyles,
 } from './ProfileWritingProjects.styles';
 
 interface WritingProject {
@@ -43,7 +42,6 @@ const ProfileWritingProjects: React.FC<ProfileWritingProjectsProps> = ({ project
                   variant="determinate"
                   value={project.progress}
                   sx={progressBarStyles}
-                  classes={{ root: progressBarRootStyles }}
                 />
               </Box>
             </ListItem>

@@ -22,12 +22,13 @@ export const actionItemStyles: SxProps<Theme> = {
   p: 2,
   borderRadius: 1,
   bgcolor: 'background.paper',
-  boxShadow: 1,
   transition: 'all 0.2s ease-in-out',
   '&:hover': {
     transform: 'translateY(-2px)',
-    boxShadow: 2,
+    boxShadow: 3,
   },
+  boxShadow: 2,
+  margin: 1
 };
 
 export const actionTitleStyles: SxProps<Theme> = {

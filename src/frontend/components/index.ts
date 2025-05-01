@@ -4,7 +4,7 @@ export { Footer } from './Footer/Footer';
 
 // Home page components
 export { Hero } from './Hero/Hero';
-export { PopularStories } from './PopularStories/PopularStories';
+export { PopularTales } from './PopularTales/PopularTales';
 export { HowItWorks } from './HowItWorks/HowItWorks';
 export { FeaturedAuthors } from './FeaturedAuthors/FeaturedAuthors';
 
