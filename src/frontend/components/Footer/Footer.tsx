@@ -14,6 +14,7 @@ import FacebookIcon from '@mui/icons-material/Facebook';
 import InstagramIcon from '@mui/icons-material/Instagram';
 import TwitterIcon from '@mui/icons-material/Twitter';
 import { navigationLinks, resourceLinks } from '../../data';
+import SuiTaleIcon from '../../assets/images/SuiTaleIcon.png';
 
 export const Footer: React.FC = () => {
   return (
@@ -31,7 +32,7 @@ export const Footer: React.FC = () => {
           <Grid item xs={12} md={3}>
             <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
               <Avatar
-                src="https://c.animaapp.com/BGr9RM3o/img/image-7.png"
+                src={SuiTaleIcon}
                 alt="SuiTale Logo"
                 sx={{ mr: 1 }}
               />

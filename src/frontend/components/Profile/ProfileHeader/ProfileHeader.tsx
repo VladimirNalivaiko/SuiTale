@@ -15,7 +15,7 @@ interface ProfileHeaderProps {
   onEditAvatar?: () => void;
 }
 
-export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
+const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   name,
   wallet,
   joinDate,
@@ -105,3 +105,5 @@ export const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     </Box>
   );
 }; 
+
+export default ProfileHeader;
