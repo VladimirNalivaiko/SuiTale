@@ -5,4 +5,5 @@ export const ROUTES = {
     MY_PROFILE: "/my-profile",
     USER_PROFILE: "/user/:id",
     TALE: "/tale/:id",
+    CREATE_TALE: "/create-tale",
 }; 
