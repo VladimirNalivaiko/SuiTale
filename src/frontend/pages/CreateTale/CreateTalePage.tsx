@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, TextField, Button, Stack, Paper, Typography, IconButton } from '@mui/material';
+import { Box, TextField, Button, Stack, Paper, Typography, IconButton, Dialog, DialogContent, DialogActions, DialogTitle } from '@mui/material';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
@@ -14,6 +14,8 @@ import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 // Import tippy.js CSS for tooltips and menus
 import 'tippy.js/dist/tippy.css';
@@ -33,6 +35,7 @@ const CreateTalePage: React.FC = () => {
   const [coverImage, setCoverImage] = useState<string>('');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
+  const [previewOpen, setPreviewOpen] = useState<boolean>(false);
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -107,6 +110,11 @@ const CreateTalePage: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Toggle preview dialog
+  const togglePreview = () => {
+    setPreviewOpen(!previewOpen);
   };
 
   if (!editor) return null;
@@ -224,6 +232,16 @@ const CreateTalePage: React.FC = () => {
                 ? `Saved at ${lastSaved.toLocaleTimeString()}` 
                 : 'Not saved'}
           </Typography>
+          <Button 
+            variant="outlined"
+            color="primary"
+            size="small"
+            onClick={togglePreview}
+            startIcon={<VisibilityIcon />}
+            sx={{ mr: 1 }}
+          >
+            Preview
+          </Button>
           <Button 
             variant="contained"
             color="primary"
@@ -545,6 +563,146 @@ const CreateTalePage: React.FC = () => {
           </Button>
         </Stack>
       </Box>
+
+      {/* Preview Dialog */}
+      <Dialog 
+        open={previewOpen} 
+        onClose={togglePreview}
+        maxWidth="md"
+        fullWidth
+        sx={{
+          '& .MuiDialog-paper': {
+            bgcolor: '#1a1a1a',
+            color: 'white',
+            backgroundImage: 'none',
+          }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' }}>
+          <Typography variant="h6">Preview</Typography>
+          <IconButton 
+            edge="end" 
+            color="inherit" 
+            onClick={togglePreview} 
+            aria-label="close"
+          >
+            <CloseIcon />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ p: 4 }}>
+            {/* Preview Cover Image */}
+            {coverImage && (
+              <Box
+                sx={{
+                  height: '300px',
+                  borderRadius: 2,
+                  overflow: 'hidden',
+                  mb: 4,
+                }}
+              >
+                <Box
+                  component="img"
+                  src={coverImage}
+                  sx={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                  }}
+                  alt="Cover"
+                />
+              </Box>
+            )}
+            
+            {/* Preview Title */}
+            <Typography 
+              variant="h1" 
+              gutterBottom
+              sx={{ 
+                fontSize: '3rem',
+                fontWeight: 'bold',
+                color: 'white',
+                mb: 4
+              }}
+            >
+              {title || 'Untitled'}
+            </Typography>
+            
+            {/* Preview Content */}
+            <Box 
+              sx={{
+                '& h1': {
+                  fontSize: '2.5rem',
+                  fontWeight: 'bold',
+                  margin: '1em 0 0.5em',
+                  color: '#9c4dff'
+                },
+                '& h2': {
+                  fontSize: '2rem',
+                  fontWeight: 'bold',
+                  margin: '1em 0 0.5em'
+                },
+                '& p': {
+                  margin: '0 0 1em 0',
+                  fontSize: '1.2rem',
+                  lineHeight: 1.6,
+                },
+                '& blockquote': {
+                  borderLeft: '3px solid #9c4dff',
+                  paddingLeft: '1em',
+                  marginLeft: 0,
+                  color: 'rgba(255, 255, 255, 0.7)',
+                  fontStyle: 'italic',
+                },
+                '& ul, & ol': {
+                  padding: '0 0 0 1.5em',
+                  margin: '0 0 1em 0'
+                },
+                '& code': {
+                  backgroundColor: 'rgba(156, 77, 255, 0.1)',
+                  color: '#9c4dff',
+                  padding: '0.2em 0.4em',
+                  borderRadius: '3px',
+                  fontFamily: 'monospace'
+                },
+                '& pre': {
+                  background: '#242424',
+                  color: '#fff',
+                  fontFamily: 'monospace',
+                  padding: '0.75em 1em',
+                  borderRadius: '0.5em',
+                  overflow: 'auto',
+                  '& code': {
+                    backgroundColor: 'transparent',
+                    color: 'inherit',
+                    padding: 0,
+                    borderRadius: 0,
+                  }
+                },
+                '& img': {
+                  maxWidth: '100%',
+                  height: 'auto',
+                  borderRadius: '0.25em',
+                  margin: '1em 0',
+                }
+              }}
+              dangerouslySetInnerHTML={{ __html: editor.getHTML() }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ borderTop: '1px solid #333', p: 2, justifyContent: 'space-between' }}>
+          <Typography variant="body2" color="text.secondary">
+            This is how your article will appear when published
+          </Typography>
+          <Button 
+            onClick={togglePreview} 
+            color="primary" 
+            variant="contained"
+          >
+            Continue Editing
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
