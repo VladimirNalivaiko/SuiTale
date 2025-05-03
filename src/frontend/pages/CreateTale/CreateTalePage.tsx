@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Box, TextField, Button, Stack, Paper, Typography, IconButton } from '@mui/material';
 import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import { NodeMenu } from '../../components/TaleEditor';
+import { NodeMenu, SlashCommandsMenu, SlashCommands } from '../../components/TaleEditor';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
 import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import CodeIcon from '@mui/icons-material/Code';
@@ -15,12 +15,15 @@ import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 import { useNavigate } from 'react-router-dom';
+// Import tippy.js CSS for tooltips and menus
+import 'tippy.js/dist/tippy.css';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
   TITLE: 'tale-editor-title',
   CONTENT: 'tale-editor-content',
-  COVER: 'tale-editor-cover'
+  COVER: 'tale-editor-cover',
+  SLASH_TIP_SHOWN: 'tale-editor-slash-tip-shown' // New key for tracking tip state
 };
 
 const CreateTalePage: React.FC = () => {
@@ -29,14 +32,38 @@ const CreateTalePage: React.FC = () => {
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [coverImage, setCoverImage] = useState<string>('');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
 
-  // Initialize editor
+  // Handle key press for hiding slash tip
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === '/') {
+      setShowSlashTip(false);
+      localStorage.setItem(LOCAL_STORAGE_KEYS.SLASH_TIP_SHOWN, 'true');
+    }
+  }, []);
+
+  // Add global keyboard listener
+  useEffect(() => {
+    // Only add the listener if we're still showing the tip
+    if (showSlashTip) {
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showSlashTip, handleKeyDown]);
+
+  // Initialize editor with SlashCommands extension
   const editor = useEditor({
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: 'Start writing...' }),
       Link.configure({ openOnClick: false }),
       Image,
+      SlashCommands.configure({
+        component: SlashCommandsMenu,
+      }),
     ],
     content: '',
     onUpdate: ({ editor }) => {
@@ -51,10 +78,12 @@ const CreateTalePage: React.FC = () => {
     const savedTitle = localStorage.getItem(LOCAL_STORAGE_KEYS.TITLE);
     const savedContent = localStorage.getItem(LOCAL_STORAGE_KEYS.CONTENT);
     const savedCover = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER);
+    const tipShown = localStorage.getItem(LOCAL_STORAGE_KEYS.SLASH_TIP_SHOWN);
     
     if (savedTitle) setTitle(savedTitle);
     if (savedContent && editor) editor.commands.setContent(savedContent);
     if (savedCover) setCoverImage(savedCover);
+    if (tipShown === 'true') setShowSlashTip(false);
   }, [editor]);
 
   // Auto-save title
@@ -336,6 +365,33 @@ const CreateTalePage: React.FC = () => {
         {/* Block menu for adding new content sections */}
         {editor && <NodeMenu editor={editor} />}
 
+        {/* Slash command hint - only show if not used before */}
+        {showSlashTip && (
+          <Box 
+            sx={{
+              mb: 2,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Paper
+              elevation={0}
+              sx={{
+                bgcolor: 'rgba(156, 77, 255, 0.1)',
+                p: 1,
+                borderRadius: 2,
+                display: 'inline-flex',
+                alignItems: 'center',
+              }}
+            >
+              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+                Tip: Type <Box component="span" sx={{ fontWeight: 'bold', color: '#9c4dff' }}>/</Box> to open the block menu
+              </Typography>
+            </Paper>
+          </Box>
+        )}
+
         {/* Tiptap editor */}
         <Box sx={{
           '& .ProseMirror': {
@@ -409,7 +465,22 @@ const CreateTalePage: React.FC = () => {
               maxWidth: '100%',
               height: 'auto',
               borderRadius: '0.25em',
-            }
+            },
+            // Add custom scrollbar styling
+            '&::-webkit-scrollbar': {
+              width: '8px',
+            },
+            '&::-webkit-scrollbar-track': {
+              background: 'rgba(0,0,0,0.2)',
+              borderRadius: '4px',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'rgba(156, 77, 255, 0.5)',
+              borderRadius: '4px',
+              '&:hover': {
+                background: 'rgba(156, 77, 255, 0.7)',
+              },
+            },
           }
         }}>
           <EditorContent editor={editor} />
