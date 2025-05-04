@@ -1,41 +1,69 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Box, TextField, Button, Stack, Paper, Typography, IconButton, Dialog, DialogContent, DialogActions, DialogTitle } from '@mui/material';
-import { useEditor, EditorContent, BubbleMenu } from '@tiptap/react';
+import { Box, TextField } from '@mui/material';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
-import { NodeMenu, SlashCommandsMenu, SlashCommands } from '../../components/TaleEditor';
-import FormatBoldIcon from '@mui/icons-material/FormatBold';
-import FormatItalicIcon from '@mui/icons-material/FormatItalic';
-import CodeIcon from '@mui/icons-material/Code';
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
-import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
-import SaveIcon from '@mui/icons-material/Save';
-import ArrowBackIcon from '@mui/icons-material/ArrowBack';
-import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import CloseIcon from '@mui/icons-material/Close';
-import { useNavigate } from 'react-router-dom';
-// Import tippy.js CSS for tooltips and menus
+import { 
+  NodeMenu, 
+  SlashCommands, 
+  FormattingMenu, 
+  EditorToolbar, 
+  CoverImageUpload,
+  MetadataPanel,
+  MetadataToggle,
+  PreviewDialog,
+  EditorHeader,
+  SlashTip
+} from '../../components/TaleEditor';
 import 'tippy.js/dist/tippy.css';
+import { 
+  editorContainerStyles, 
+  editorContentStyles, 
+  titleInputStyles, 
+  bottomToolbarStyles,
+  tipTapEditorStyles
+} from '../../styles/TaleEditor.styles';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
   TITLE: 'tale-editor-title',
   CONTENT: 'tale-editor-content',
   COVER: 'tale-editor-cover',
-  SLASH_TIP_SHOWN: 'tale-editor-slash-tip-shown' // New key for tracking tip state
+  SLASH_TIP_SHOWN: 'tale-editor-slash-tip-shown',
+  DESCRIPTION: 'tale-editor-description',
+  TAGS: 'tale-editor-tags'
 };
 
+// Popular tags for autocpmplete
+const SUGGESTED_TAGS = [
+  'Fiction', 'Non-Fiction', 'Tutorial', 'Technology', 'Programming', 
+  'Web Development', 'Design', 'UX', 'React', 'JavaScript', 
+  'TypeScript', 'Blockchain', 'Crypto', 'NFT', 'Sui', 'Science', 
+  'Art', 'Music', 'Philosophy', 'History', 'Travel', 'Food', 
+  'Health', 'Fitness', 'Business', 'Finance', 'Education', 'Sports'
+];
+
+// Approximate reading speed (words per minute)
+const READING_SPEED = 200;
+
 const CreateTalePage: React.FC = () => {
-  const navigate = useNavigate();
   const [title, setTitle] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [coverImage, setCoverImage] = useState<string>('');
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  
+  // States for metadata
+  const [description, setDescription] = useState<string>('');
+  const [tags, setTags] = useState<string[]>([]);
+  const [metadataOpen, setMetadataOpen] = useState<boolean>(false);
+  
+  // Reading statistics
+  const [wordCount, setWordCount] = useState<number>(0);
+  const [readingTime, setReadingTime] = useState<number>(0);
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -64,17 +92,35 @@ const CreateTalePage: React.FC = () => {
       Placeholder.configure({ placeholder: 'Start writing...' }),
       Link.configure({ openOnClick: false }),
       Image,
-      SlashCommands.configure({
-        component: SlashCommandsMenu,
-      }),
+      SlashCommands,
     ],
     content: '',
     onUpdate: ({ editor }) => {
       // Auto-save when content changes
       localStorage.setItem(LOCAL_STORAGE_KEYS.CONTENT, editor.getHTML());
       setLastSaved(new Date());
+      
+      // Calculate word count and reading time
+      const text = editor.getText();
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      const count = words.length;
+      
+      setWordCount(count);
+      setReadingTime(Math.max(1, Math.ceil(count / READING_SPEED)));
     }
-  })!;
+  });
+
+  // Calculate reading time based on content
+  const calculateReadingStats = useCallback(() => {
+    if (editor) {
+      const text = editor.getText();
+      const words = text.trim().split(/\s+/).filter(Boolean);
+      const count = words.length;
+      
+      setWordCount(count);
+      setReadingTime(Math.max(1, Math.ceil(count / READING_SPEED)));
+    }
+  }, [editor]);
 
   // Load saved data from localStorage
   useEffect(() => {
@@ -82,12 +128,21 @@ const CreateTalePage: React.FC = () => {
     const savedContent = localStorage.getItem(LOCAL_STORAGE_KEYS.CONTENT);
     const savedCover = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER);
     const tipShown = localStorage.getItem(LOCAL_STORAGE_KEYS.SLASH_TIP_SHOWN);
+    const savedDescription = localStorage.getItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+    const savedTags = localStorage.getItem(LOCAL_STORAGE_KEYS.TAGS);
     
     if (savedTitle) setTitle(savedTitle);
     if (savedContent && editor) editor.commands.setContent(savedContent);
     if (savedCover) setCoverImage(savedCover);
     if (tipShown === 'true') setShowSlashTip(false);
-  }, [editor]);
+    if (savedDescription) setDescription(savedDescription);
+    if (savedTags) setTags(JSON.parse(savedTags));
+    
+    // Calculate initial reading stats
+    if (editor) {
+      calculateReadingStats();
+    }
+  }, [editor, calculateReadingStats]);
 
   // Auto-save title
   useEffect(() => {
@@ -96,6 +151,22 @@ const CreateTalePage: React.FC = () => {
       setLastSaved(new Date());
     }
   }, [title]);
+  
+  // Auto-save description
+  useEffect(() => {
+    if (description) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.DESCRIPTION, description);
+      setLastSaved(new Date());
+    }
+  }, [description]);
+  
+  // Auto-save tags
+  useEffect(() => {
+    if (tags.length > 0) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.TAGS, JSON.stringify(tags));
+      setLastSaved(new Date());
+    }
+  }, [tags]);
 
   // Handle cover image upload
   const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -116,13 +187,30 @@ const CreateTalePage: React.FC = () => {
   const togglePreview = () => {
     setPreviewOpen(!previewOpen);
   };
+  
+  // Toggle metadata panel
+  const toggleMetadata = () => {
+    setMetadataOpen(!metadataOpen);
+  };
+  
+  // Update tags
+  const handleTagsChange = (newTags: string[]) => {
+    setTags(newTags);
+  };
 
-  if (!editor) return null;
-
+  // Handle save/publish
   const handleSave = async () => {
     setIsSaving(true);
-    const html = editor.getHTML();
-    console.log({ title, html, coverImage });
+    const html = editor?.getHTML() || '';
+    console.log({ 
+      title, 
+      description, 
+      html, 
+      coverImage, 
+      tags,
+      wordCount,
+      readingTime
+    });
     
     // Simulate saving
     setTimeout(() => {
@@ -130,225 +218,31 @@ const CreateTalePage: React.FC = () => {
     }, 1000);
   };
 
+  if (!editor) return null;
+
   return (
-    <Box sx={{ 
-      bgcolor: '#121212', 
-      color: 'white',
-      minHeight: '100vh',
-      display: 'flex',
-      flexDirection: 'column' 
-    }}>
+    <Box sx={editorContainerStyles}>
       {/* Formatting menu that appears when text is selected */}
-      {editor && (
-        <BubbleMenu
-          editor={editor}
-          tippyOptions={{ duration: 100 }}
-          shouldShow={({ editor, view, state, oldState, from, to }) => {
-            // Show only if there is selection
-            return from !== to;
-          }}
-        >
-          <Paper elevation={3} sx={{ 
-            display: 'flex', 
-            borderRadius: '4px',
-            bgcolor: '#333',
-            color: 'white'
-          }}>
-            <IconButton 
-              size="small" 
-              color="inherit"
-              onClick={() => editor.chain().focus().toggleBold().run()}
-              sx={{ 
-                color: editor.isActive('bold') ? '#9c4dff' : 'white',
-              }}
-            >
-              <FormatBoldIcon fontSize="small" />
-            </IconButton>
-            <IconButton 
-              size="small" 
-              color="inherit"
-              onClick={() => editor.chain().focus().toggleItalic().run()}
-              sx={{ 
-                color: editor.isActive('italic') ? '#9c4dff' : 'white',
-              }}
-            >
-              <FormatItalicIcon fontSize="small" />
-            </IconButton>
-            <IconButton 
-              size="small" 
-              color="inherit"
-              onClick={() => editor.chain().focus().toggleCode().run()}
-              sx={{ 
-                color: editor.isActive('code') ? '#9c4dff' : 'white',
-              }}
-            >
-              <CodeIcon fontSize="small" />
-            </IconButton>
-            <IconButton 
-              size="small" 
-              color="inherit"
-              onClick={() => editor.chain().focus().toggleBulletList().run()}
-              sx={{ 
-                color: editor.isActive('bulletList') ? '#9c4dff' : 'white',
-              }}
-            >
-              <FormatListBulletedIcon fontSize="small" />
-            </IconButton>
-            <IconButton 
-              size="small" 
-              color="inherit"
-              onClick={() => editor.chain().focus().toggleOrderedList().run()}
-              sx={{ 
-                color: editor.isActive('orderedList') ? '#9c4dff' : 'white',
-              }}
-            >
-              <FormatListNumberedIcon fontSize="small" />
-            </IconButton>
-          </Paper>
-        </BubbleMenu>
-      )}
+      <FormattingMenu editor={editor} />
 
       {/* Header */}
-      <Box sx={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        p: 2,
-        borderBottom: '1px solid #333' 
-      }}>
-        <IconButton 
-          color="inherit" 
-          aria-label="back"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowBackIcon />
-        </IconButton>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ mr: 2 }}>
-            {isSaving 
-              ? 'Saving...' 
-              : lastSaved 
-                ? `Saved at ${lastSaved.toLocaleTimeString()}` 
-                : 'Not saved'}
-          </Typography>
-          <Button 
-            variant="outlined"
-            color="primary"
-            size="small"
-            onClick={togglePreview}
-            startIcon={<VisibilityIcon />}
-            sx={{ mr: 1 }}
-          >
-            Preview
-          </Button>
-          <Button 
-            variant="contained"
-            color="primary"
-            size="small"
-            onClick={handleSave}
-            startIcon={<SaveIcon />}
-          >
-            Publish
-          </Button>
-        </Box>
-      </Box>
+      <EditorHeader 
+        wordCount={wordCount}
+        readingTime={readingTime}
+        lastSaved={lastSaved}
+        isSaving={isSaving}
+        onTogglePreview={togglePreview}
+        onToggleMetadata={toggleMetadata}
+        onSave={handleSave}
+      />
 
       {/* Editor */}
-      <Box sx={{ 
-        maxWidth: '800px',
-        width: '100%',
-        mx: 'auto',
-        p: 4,
-        flexGrow: 1
-      }}>
+      <Box sx={editorContentStyles}>
         {/* Cover Image */}
-        <Box sx={{ mb: 4, position: 'relative' }}>
-          {coverImage ? (
-            <Box
-              sx={{
-                position: 'relative',
-                height: '300px',
-                borderRadius: 2,
-                overflow: 'hidden',
-                mb: 2,
-              }}
-            >
-              <Box
-                component="img"
-                src={coverImage}
-                sx={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-                alt="Cover"
-              />
-              <Box
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  right: 0,
-                  p: 1,
-                }}
-              >
-                <input
-                  accept="image/*"
-                  type="file"
-                  id="cover-upload"
-                  onChange={handleCoverUpload}
-                  style={{ display: 'none' }}
-                />
-                <label htmlFor="cover-upload">
-                  <IconButton
-                    color="inherit"
-                    component="span"
-                    sx={{
-                      bgcolor: 'rgba(0,0,0,0.5)',
-                      '&:hover': {
-                        bgcolor: 'rgba(0,0,0,0.7)',
-                      },
-                    }}
-                  >
-                    <AddPhotoAlternateIcon />
-                  </IconButton>
-                </label>
-              </Box>
-            </Box>
-          ) : (
-            <Box
-              sx={{
-                height: '150px',
-                border: '2px dashed #333',
-                borderRadius: 2,
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                mb: 2,
-                cursor: 'pointer',
-                '&:hover': {
-                  borderColor: '#9c4dff',
-                },
-              }}
-            >
-              <input
-                accept="image/*"
-                type="file"
-                id="cover-upload"
-                onChange={handleCoverUpload}
-                style={{ display: 'none' }}
-              />
-              <label htmlFor="cover-upload" style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                <Box sx={{ textAlign: 'center' }}>
-                  <AddPhotoAlternateIcon sx={{ fontSize: 40, color: '#666' }} />
-                  <Typography variant="body2" sx={{ mt: 1, color: '#666' }}>
-                    Add Cover Image
-                  </Typography>
-                </Box>
-              </label>
-            </Box>
-          )}
-        </Box>
+        <CoverImageUpload 
+          coverImage={coverImage} 
+          onCoverUpload={handleCoverUpload} 
+        />
 
         {/* Title input - borderless, large size */}
         <TextField
@@ -357,352 +251,57 @@ const CreateTalePage: React.FC = () => {
           placeholder="Title"
           fullWidth
           variant="standard"
-          sx={{ 
-            mb: 4,
-            input: { 
-              color: 'white',
-              fontSize: '3rem',
-              fontWeight: 'bold',
-              '&::placeholder': {
-                color: 'rgba(255,255,255,0.5)',
-                opacity: 1
-              }
-            },
-            '& .MuiInput-underline:before': {
-              borderBottomColor: 'transparent'
-            },
-            '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
-              borderBottomColor: 'transparent'
-            },
-          }}
+          sx={titleInputStyles}
           inputProps={{
             style: { caretColor: '#9c4dff' }
           }}
         />
-
-        {/* Block menu for adding new content sections */}
-        {editor && <NodeMenu editor={editor} />}
-
-        {/* Slash command hint - only show if not used before */}
-        {showSlashTip && (
-          <Box 
-            sx={{
-              mb: 2,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <Paper
-              elevation={0}
-              sx={{
-                bgcolor: 'rgba(156, 77, 255, 0.1)',
-                p: 1,
-                borderRadius: 2,
-                display: 'inline-flex',
-                alignItems: 'center',
-              }}
-            >
-              <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-                Tip: Type <Box component="span" sx={{ fontWeight: 'bold', color: '#9c4dff' }}>/</Box> to open the block menu
-              </Typography>
-            </Paper>
-          </Box>
+        
+        {/* Metadata panel */}
+        <MetadataPanel 
+          description={description}
+          tags={tags}
+          suggestedTags={SUGGESTED_TAGS}
+          open={metadataOpen}
+          onDescriptionChange={(e) => setDescription(e.target.value)}
+          onTagsChange={handleTagsChange}
+          onClose={toggleMetadata}
+        />
+        
+        {/* Metadata toggle when closed */}
+        {!metadataOpen && (
+          <MetadataToggle onClick={toggleMetadata} />
         )}
 
+        {/* Block menu for adding new content sections */}
+        <NodeMenu editor={editor} />
+
+        {/* Slash command hint - only show if not used before */}
+        <SlashTip show={showSlashTip} />
+
         {/* Tiptap editor */}
-        <Box sx={{
-          '& .ProseMirror': {
-            minHeight: '300px',
-            color: 'white',
-            fontSize: '1.2rem',
-            lineHeight: 1.6,
-            outline: 'none',
-            '&:focus': {
-              outline: 'none'
-            },
-            '& p': {
-              margin: '0 0 1em 0',
-              position: 'relative',
-              '&:hover::before': {
-                content: '""',
-                position: 'absolute',
-                left: '-20px',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor: 'rgba(156, 77, 255, 0.5)',
-              }
-            },
-            '& h1': {
-              fontSize: '2.5rem',
-              fontWeight: 'bold',
-              margin: '1em 0 0.5em',
-              color: '#9c4dff'
-            },
-            '& h2': {
-              fontSize: '2rem',
-              fontWeight: 'bold',
-              margin: '1em 0 0.5em'
-            },
-            '& blockquote': {
-              borderLeft: '3px solid #9c4dff',
-              paddingLeft: '1em',
-              marginLeft: 0,
-              color: 'rgba(255, 255, 255, 0.7)',
-              fontStyle: 'italic',
-            },
-            '& ul, & ol': {
-              padding: '0 0 0 1.5em',
-              margin: '0 0 1em 0'
-            },
-            '& code': {
-              backgroundColor: 'rgba(156, 77, 255, 0.1)',
-              color: '#9c4dff',
-              padding: '0.2em 0.4em',
-              borderRadius: '3px',
-              fontFamily: 'monospace'
-            },
-            '& pre': {
-              background: '#1a1a1a',
-              color: '#fff',
-              fontFamily: 'monospace',
-              padding: '0.75em 1em',
-              borderRadius: '0.5em',
-              overflow: 'auto',
-              '& code': {
-                backgroundColor: 'transparent',
-                color: 'inherit',
-                padding: 0,
-                borderRadius: 0,
-              }
-            },
-            '& img': {
-              maxWidth: '100%',
-              height: 'auto',
-              borderRadius: '0.25em',
-            },
-            // Add custom scrollbar styling
-            '&::-webkit-scrollbar': {
-              width: '8px',
-            },
-            '&::-webkit-scrollbar-track': {
-              background: 'rgba(0,0,0,0.2)',
-              borderRadius: '4px',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'rgba(156, 77, 255, 0.5)',
-              borderRadius: '4px',
-              '&:hover': {
-                background: 'rgba(156, 77, 255, 0.7)',
-              },
-            },
-          }
-        }}>
+        <Box sx={tipTapEditorStyles}>
           <EditorContent editor={editor} />
         </Box>
       </Box>
 
       {/* Bottom toolbar */}
-      <Box sx={{ 
-        position: 'fixed',
-        bottom: 20,
-        left: '50%',
-        transform: 'translateX(-50%)',
-        bgcolor: '#272727',
-        borderRadius: 2,
-        p: 1,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
-      }}>
-        <Stack direction="row" spacing={1}>
-          <Button 
-            variant="text" 
-            color="inherit"
-            size="small"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-            sx={{ color: editor.isActive('heading', { level: 1 }) ? '#9c4dff' : 'white' }}
-          >
-            Heading
-          </Button>
-          <Button 
-            variant="text" 
-            color="inherit"
-            size="small"
-            onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-            sx={{ color: editor.isActive('heading', { level: 2 }) ? '#9c4dff' : 'white' }}
-          >
-            Subheading
-          </Button>
-          <Button 
-            variant="text" 
-            color="inherit"
-            size="small"
-            onClick={() => {
-              const url = window.prompt('Enter image URL');
-              if (url) {
-                editor.chain().focus().setImage({ src: url }).run();
-              }
-            }}
-          >
-            Image
-          </Button>
-          <Button 
-            variant="text" 
-            color="inherit"
-            size="small"
-            onClick={() => {
-              const url = window.prompt('Enter URL');
-              if (url) {
-                editor.chain().focus().setLink({ href: url }).run();
-              }
-            }}
-          >
-            Link
-          </Button>
-        </Stack>
+      <Box sx={bottomToolbarStyles}>
+        <EditorToolbar editor={editor} />
       </Box>
 
       {/* Preview Dialog */}
-      <Dialog 
-        open={previewOpen} 
+      <PreviewDialog 
+        open={previewOpen}
         onClose={togglePreview}
-        maxWidth="md"
-        fullWidth
-        sx={{
-          '& .MuiDialog-paper': {
-            bgcolor: '#1a1a1a',
-            color: 'white',
-            backgroundImage: 'none',
-          }
-        }}
-      >
-        <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #333' }}>
-          <Typography variant="h6">Preview</Typography>
-          <IconButton 
-            edge="end" 
-            color="inherit" 
-            onClick={togglePreview} 
-            aria-label="close"
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
-          <Box sx={{ p: 4 }}>
-            {/* Preview Cover Image */}
-            {coverImage && (
-              <Box
-                sx={{
-                  height: '300px',
-                  borderRadius: 2,
-                  overflow: 'hidden',
-                  mb: 4,
-                }}
-              >
-                <Box
-                  component="img"
-                  src={coverImage}
-                  sx={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                  }}
-                  alt="Cover"
-                />
-              </Box>
-            )}
-            
-            {/* Preview Title */}
-            <Typography 
-              variant="h1" 
-              gutterBottom
-              sx={{ 
-                fontSize: '3rem',
-                fontWeight: 'bold',
-                color: 'white',
-                mb: 4
-              }}
-            >
-              {title || 'Untitled'}
-            </Typography>
-            
-            {/* Preview Content */}
-            <Box 
-              sx={{
-                '& h1': {
-                  fontSize: '2.5rem',
-                  fontWeight: 'bold',
-                  margin: '1em 0 0.5em',
-                  color: '#9c4dff'
-                },
-                '& h2': {
-                  fontSize: '2rem',
-                  fontWeight: 'bold',
-                  margin: '1em 0 0.5em'
-                },
-                '& p': {
-                  margin: '0 0 1em 0',
-                  fontSize: '1.2rem',
-                  lineHeight: 1.6,
-                },
-                '& blockquote': {
-                  borderLeft: '3px solid #9c4dff',
-                  paddingLeft: '1em',
-                  marginLeft: 0,
-                  color: 'rgba(255, 255, 255, 0.7)',
-                  fontStyle: 'italic',
-                },
-                '& ul, & ol': {
-                  padding: '0 0 0 1.5em',
-                  margin: '0 0 1em 0'
-                },
-                '& code': {
-                  backgroundColor: 'rgba(156, 77, 255, 0.1)',
-                  color: '#9c4dff',
-                  padding: '0.2em 0.4em',
-                  borderRadius: '3px',
-                  fontFamily: 'monospace'
-                },
-                '& pre': {
-                  background: '#242424',
-                  color: '#fff',
-                  fontFamily: 'monospace',
-                  padding: '0.75em 1em',
-                  borderRadius: '0.5em',
-                  overflow: 'auto',
-                  '& code': {
-                    backgroundColor: 'transparent',
-                    color: 'inherit',
-                    padding: 0,
-                    borderRadius: 0,
-                  }
-                },
-                '& img': {
-                  maxWidth: '100%',
-                  height: 'auto',
-                  borderRadius: '0.25em',
-                  margin: '1em 0',
-                }
-              }}
-              dangerouslySetInnerHTML={{ __html: editor.getHTML() }}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ borderTop: '1px solid #333', p: 2, justifyContent: 'space-between' }}>
-          <Typography variant="body2" color="text.secondary">
-            This is how your article will appear when published
-          </Typography>
-          <Button 
-            onClick={togglePreview} 
-            color="primary" 
-            variant="contained"
-          >
-            Continue Editing
-          </Button>
-        </DialogActions>
-      </Dialog>
+        title={title}
+        content={editor.getHTML()}
+        coverImage={coverImage}
+        description={description}
+        tags={tags}
+        wordCount={wordCount}
+        readingTime={readingTime}
+      />
     </Box>
   );
 };

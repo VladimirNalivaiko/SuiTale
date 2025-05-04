@@ -1,0 +1,107 @@
+import React from 'react';
+import { 
+  Box, 
+  Button, 
+  IconButton, 
+  Typography, 
+  Tooltip 
+} from '@mui/material';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import SaveIcon from '@mui/icons-material/Save';
+import SettingsIcon from '@mui/icons-material/Settings';
+import TimerIcon from '@mui/icons-material/Timer';
+import { useNavigate } from 'react-router-dom';
+
+interface EditorHeaderProps {
+  wordCount: number;
+  readingTime: number;
+  lastSaved: Date | null;
+  isSaving: boolean;
+  onTogglePreview: () => void;
+  onToggleMetadata: () => void;
+  onSave: () => void;
+}
+
+const EditorHeader: React.FC<EditorHeaderProps> = ({
+  wordCount,
+  readingTime,
+  lastSaved,
+  isSaving,
+  onTogglePreview,
+  onToggleMetadata,
+  onSave
+}) => {
+  const navigate = useNavigate();
+  
+  return (
+    <Box sx={{ 
+      display: 'flex', 
+      justifyContent: 'space-between', 
+      alignItems: 'center',
+      p: 2,
+      borderBottom: '1px solid #333' 
+    }}>
+      <IconButton 
+        color="inherit" 
+        aria-label="back"
+        onClick={() => navigate(-1)}
+      >
+        <ArrowBackIcon />
+      </IconButton>
+      
+      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Tooltip title="Reading stats">
+          <Typography variant="body2" sx={{ 
+            display: 'flex',
+            alignItems: 'center',
+            mr: 2,
+            color: 'rgba(255,255,255,0.7)',
+          }}>
+            <TimerIcon fontSize="small" sx={{ mr: 0.5 }} />
+            {wordCount} words · {readingTime} min read
+          </Typography>
+        </Tooltip>
+        
+        <Tooltip title="Article settings">
+          <IconButton 
+            color="inherit"
+            onClick={onToggleMetadata}
+            sx={{ mr: 1 }}
+          >
+            <SettingsIcon />
+          </IconButton>
+        </Tooltip>
+        
+        <Typography variant="body2" sx={{ mr: 2 }}>
+          {isSaving 
+            ? 'Saving...' 
+            : lastSaved 
+              ? `Saved at ${lastSaved.toLocaleTimeString()}` 
+              : 'Not saved'}
+        </Typography>
+        <Button 
+          variant="outlined"
+          color="primary"
+          size="small"
+          onClick={onTogglePreview}
+          startIcon={<VisibilityIcon />}
+          sx={{ mr: 1 }}
+        >
+          Preview
+        </Button>
+        <Button 
+          variant="contained"
+          color="primary"
+          size="small"
+          onClick={onSave}
+          startIcon={<SaveIcon />}
+        >
+          Publish
+        </Button>
+      </Box>
+    </Box>
+  );
+};
+
+export default EditorHeader; 

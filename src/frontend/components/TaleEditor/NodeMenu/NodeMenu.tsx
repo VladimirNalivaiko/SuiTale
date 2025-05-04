@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { Box, Paper, Typography, IconButton, Stack, Collapse } from '@mui/material';
 import { Editor } from '@tiptap/react';
-import DragIndicatorIcon from '@mui/icons-material/DragIndicator';
 import ImageIcon from '@mui/icons-material/Image';
 import CodeIcon from '@mui/icons-material/Code';
 import YouTubeIcon from '@mui/icons-material/YouTube';
@@ -48,6 +47,7 @@ const NodeMenu: React.FC<NodeMenuProps> = ({ editor }) => {
       case 'youtube':
         const youtubeUrl = window.prompt('Enter YouTube URL');
         if (youtubeUrl) {
+          // TODO: Add a YouTube extension
           // This is a placeholder - TipTap needs an extension for YouTube embeds
           // In a real implementation, you'd use a YouTube extension
           editor.chain().focus().setContent(`<div class="youtube-embed">${youtubeUrl}</div>`).run();
