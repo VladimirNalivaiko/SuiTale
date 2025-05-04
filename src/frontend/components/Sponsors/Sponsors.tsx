@@ -11,22 +11,21 @@ export const Sponsors: React.FC = () => {
   return (
     <Box 
       sx={{ 
-        py: 8, 
-        bgcolor: 'background.paper',
+        py: 8,
         borderTop: '1px solid',
         borderColor: 'divider'
       }}
     >
       <Container maxWidth="lg">
         <Typography 
-          variant="subtitle2" 
-          color="text.secondary" 
-          align="center" 
-          sx={{ 
-            mb: 4,
-            textTransform: 'uppercase',
-            letterSpacing: '1px',
-            fontSize: '0.75rem'
+          component="h2"
+          align="center"
+          variant="h3"
+          color="text.primary"
+          sx={{              
+            fontWeight: 700, 
+            mb: 3,
+            fontSize: { xs: '2rem', md: '2.5rem' } 
           }}
         >
           Backed by
@@ -40,7 +39,7 @@ export const Sponsors: React.FC = () => {
           sx={{ opacity: 0.8 }}
         >
           {sponsors.map((sponsor) => (
-            <Grid item key={sponsor.id} xs={6} sm={4} md={2}>
+            <Grid item key={sponsor.id} xs={6} sm={6} md={3} lg={3}>
               <Box 
                 sx={{ 
                   height: 40, 
@@ -55,8 +54,10 @@ export const Sponsors: React.FC = () => {
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: 'text.secondary',
-                    borderRadius: 1 
+                    borderRadius: 1,
+                    fontWeight: 600,
+                    mb: 1,
+                    fontSize: '1.25rem'
                   }} 
                 >
                   {sponsor.icon} &nbsp; {sponsor.name}
@@ -68,9 +69,9 @@ export const Sponsors: React.FC = () => {
         
         <Typography 
           variant="body2" 
-          color="text.secondary" 
+          color="text.primary" 
           align="center" 
-          sx={{ mt: 4, fontSize: '0.75rem' }}
+          sx={{ mt: 4, fontSize: '1rem' }}
         >
           And many more soon
         </Typography>

@@ -10,6 +10,7 @@ export const Hero: React.FC = () => {
         color: "#111",
         py: { xs: 6, md: 10 },
         overflow: 'hidden',
+        height: {xs: '90vh', sm: '75vh', md: ''},
       }}
     >
       <Container maxWidth="lg">
@@ -78,7 +79,7 @@ export const Hero: React.FC = () => {
               sx={{
                 display: 'flex',
                 justifyContent: 'center',
-                position: 'relative'
+                position: 'relative',
               }}
             >
               {/* First (back) screen - icon panel */}
@@ -95,6 +96,10 @@ export const Hero: React.FC = () => {
                   mr: { xs: 0, md: -10 },
                   mt: { xs: 0, md: -5 },
                   border: '1px solid #eaeaea',
+                  transition: 'transform 0.3s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateX(-15px)'
+                  }
                 }}
               >
                 {/* Here could be icons and statistics as in the picture */}
@@ -107,7 +112,8 @@ export const Hero: React.FC = () => {
                         fontSize: '1.2rem', 
                         display: 'block',
                         mb: 1,
-                        fontWeight: 'bold'
+                        width: '100%',
+                        fontWeight: 'bold',
                       }}
                     >
                       Tale Statistics
@@ -138,10 +144,14 @@ export const Hero: React.FC = () => {
                   right: { xs: '5%', md: '10%' },
                   zIndex: 2,
                   border: '1px solid #eaeaea',
+                  transition: 'transform 0.3s ease-in-out',
+                  '&:hover': {
+                    transform: 'translateX(10px)'
+                  }
                 }}
               >
                 {/* Mobile app screen */}
-                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '320px' }}>
                   <Box sx={{ textAlign: 'center', p: 1 }}>
                     <Typography
                       variant="caption"
