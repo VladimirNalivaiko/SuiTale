@@ -57,8 +57,8 @@ export const howItWorksSteps: HowItWorksStep[] = [
   },
   {
     id: 2,
-    title: "Create Story",
-    description: "Write and format your story using our intuitive editor",
+    title: "Create Tale",
+    description: "Write and format your tale using our intuitive editor",
   },
   {
     id: 3,

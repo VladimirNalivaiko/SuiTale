@@ -23,7 +23,7 @@ export const theme = createTheme({
       paper: '#1e1e1e',
     },
     text: {
-      primary: '#ffffff',
+      primary: 'rgb(25, 4, 35)',
       secondary: 'rgba(255, 255, 255, 0.7)',
       disabled: 'rgba(255, 255, 255, 0.5)',
     },

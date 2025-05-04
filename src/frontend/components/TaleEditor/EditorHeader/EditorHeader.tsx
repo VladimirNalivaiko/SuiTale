@@ -11,7 +11,8 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import SaveIcon from '@mui/icons-material/Save';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TimerIcon from '@mui/icons-material/Timer';
-import { useNavigate } from 'react-router-dom';
+import { generatePath, useNavigate } from 'react-router-dom';
+import { ROUTES } from '../../../types/constants';
 
 interface EditorHeaderProps {
   wordCount: number;
@@ -33,6 +34,10 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
   onSave
 }) => {
   const navigate = useNavigate();
+
+  const handleBack = () => {
+    navigate(generatePath(ROUTES.INITIAL_ROUTE));
+  };
   
   return (
     <Box sx={{ 
@@ -45,7 +50,7 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
       <IconButton 
         color="inherit" 
         aria-label="back"
-        onClick={() => navigate(-1)}
+        onClick={handleBack}
       >
         <ArrowBackIcon />
       </IconButton>

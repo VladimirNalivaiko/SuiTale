@@ -1,14 +1,21 @@
 import React from 'react';
 import { DefaultLayout } from "../../layouts";
-import { Hero, PopularTales, HowItWorks, FeaturedAuthors } from '../../components';
+import { 
+  Hero, 
+  TrustedBy, 
+  Features, 
+  Testimonials, 
+  Sponsors 
+} from '../../components';
 
 const HomePage: React.FC = () => {
   return (
     <DefaultLayout>
       <Hero />
-      <PopularTales />
-      <HowItWorks />
-      <FeaturedAuthors />
+      <TrustedBy />
+      <Features />
+      <Testimonials />
+      <Sponsors />
     </DefaultLayout>
   );
 };
