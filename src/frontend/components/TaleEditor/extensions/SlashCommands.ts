@@ -2,7 +2,17 @@ import { Extension } from '@tiptap/core';
 import { PluginKey } from 'prosemirror-state';
 import Suggestion from '@tiptap/suggestion';
 import { ReactRenderer } from '@tiptap/react';
-import tippy from 'tippy.js';
+import tippy, { Instance } from 'tippy.js';
+
+// Type for the component reference
+interface ComponentRef {
+  ref: {
+    onKeyDown: (props: any) => boolean;
+  };
+  element: HTMLElement;
+  destroy: () => void;
+  updateProps: (props: any) => void;
+}
 
 // Interface for the Props of the Slash Commands extension
 export interface SlashCommandsOptions {
@@ -42,18 +52,19 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
         },
         
         render: () => {
-          let component;
-          let popup;
+          let component: ComponentRef | null = null;
+          let popup: Instance | null = null;
           
           return {
             onStart: (props) => {
               component = new ReactRenderer(this.options.component, {
                 props,
                 editor: this.editor,
-              });
+              }) as unknown as ComponentRef;
               
-              // Mount the popup
-              popup = tippy('body', {
+              // Use DOMRect directly instead of custom object
+              // @ts-ignore - Type issues with tippy and GetReferenceClientRect
+              popup = tippy(document.body, {
                 getReferenceClientRect: props.clientRect,
                 appendTo: () => document.body,
                 content: component.element,
@@ -77,29 +88,40 @@ export const SlashCommands = Extension.create<SlashCommandsOptions>({
                     }
                   ],
                 },
-              })[0];
+              });
             },
             
             onUpdate(props) {
-              component?.updateProps(props);
+              if (component) {
+                component.updateProps(props);
+              }
               
-              popup?.setProps({
-                getReferenceClientRect: props.clientRect,
-              });
+              if (popup) {
+                // @ts-ignore - Type issues with tippy and GetReferenceClientRect
+                popup.setProps({
+                  getReferenceClientRect: props.clientRect,
+                });
+              }
             },
             
             onKeyDown(props) {
               if (props.event.key === 'Escape') {
-                popup?.hide();
+                if (popup) {
+                  popup.hide();
+                }
                 return true;
               }
               
-              return component?.ref?.onKeyDown(props);
+              return component?.ref?.onKeyDown(props) || false;
             },
             
             onExit() {
-              popup?.destroy();
-              component?.destroy();
+              if (popup) {
+                popup.destroy();
+              }
+              if (component) {
+                component.destroy();
+              }
             },
           };
         },

@@ -15,7 +15,8 @@ import {
   MetadataToggle,
   PreviewDialog,
   EditorHeader,
-  SlashTip
+  SlashTip,
+  SlashCommandsMenu
 } from '../../components/TaleEditor';
 import 'tippy.js/dist/tippy.css';
 import { 
@@ -25,6 +26,9 @@ import {
   bottomToolbarStyles,
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
+import { useCreateTale, useUploadCoverImage } from '../../hooks/useTales';
+import { CreateTalePayload } from '../../api/tales.api';
+import { useSnackbar } from 'notistack';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -65,6 +69,11 @@ const CreateTalePage: React.FC = () => {
   const [wordCount, setWordCount] = useState<number>(0);
   const [readingTime, setReadingTime] = useState<number>(0);
 
+  // React Query hooks
+  const { mutateAsync: createTale } = useCreateTale();
+  const { mutateAsync: uploadCover } = useUploadCoverImage();
+  const { enqueueSnackbar } = useSnackbar();
+
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (e.key === '/') {
@@ -92,7 +101,10 @@ const CreateTalePage: React.FC = () => {
       Placeholder.configure({ placeholder: 'Start writing...' }),
       Link.configure({ openOnClick: false }),
       Image,
-      SlashCommands,
+      SlashCommands.configure({
+        component: SlashCommandsMenu,
+        char: '/'
+      }),
     ],
     content: '',
     onUpdate: ({ editor }) => {
@@ -169,17 +181,28 @@ const CreateTalePage: React.FC = () => {
   }, [tags]);
 
   // Handle cover image upload
-  const handleCoverUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageDataUrl = e.target?.result as string;
-        setCoverImage(imageDataUrl);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, imageDataUrl);
-        setLastSaved(new Date());
-      };
-      reader.readAsDataURL(file);
+      try {
+        // For immediate preview, still use FileReader
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const imageDataUrl = e.target?.result as string;
+          setCoverImage(imageDataUrl);
+          localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, imageDataUrl);
+          setLastSaved(new Date());
+        };
+        reader.readAsDataURL(file);
+        
+        // In the background, upload to the server
+        // This is optional - you can choose to upload only when saving the tale
+        // const { coverImage: serverCoverImage } = await uploadCover(file);
+        // setCoverImage(serverCoverImage);
+      } catch (error) {
+        console.error('Error uploading cover image:', error);
+        enqueueSnackbar('Failed to upload cover image', { variant: 'error' });
+      }
     }
   };
 
@@ -201,21 +224,80 @@ const CreateTalePage: React.FC = () => {
   // Handle save/publish
   const handleSave = async () => {
     setIsSaving(true);
-    const html = editor?.getHTML() || '';
-    console.log({ 
-      title, 
-      description, 
-      html, 
-      coverImage, 
-      tags,
-      wordCount,
-      readingTime
-    });
-    
-    // Simulate saving
-    setTimeout(() => {
+    // Get the raw HTML content from the editor
+    const rawHtml = editor?.getHTML() || '';
+
+    // --- Start of more robust HTML cleaning ---
+
+    // 1. Remove HTML comments
+    let cleanedHtml = rawHtml.replace(/<!--.*?-->/gs, '');
+
+    // 2. Iteratively remove empty block-level tags
+    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li']; // Add more tags if needed
+    let previousHtml;
+    do {
+        previousHtml = cleanedHtml;
+        tagsToClean.forEach(tag => {
+            // Matches <tag> potentially followed by whitespace </tag>
+            const regex = new RegExp(`<${tag}[^>]*>\\s*<\\/${tag}>`, 'gi');
+            cleanedHtml = cleanedHtml.replace(regex, '');
+        });
+        // Trim leading/trailing whitespace after each pass to help catch nested structures
+        cleanedHtml = cleanedHtml.trim();
+    } while (previousHtml !== cleanedHtml && cleanedHtml.length > 0); // Repeat until no more changes or string becomes empty
+
+    // --- End of HTML cleaning ---
+
+    // Check if the content is empty after cleaning
+    if (!cleanedHtml) {
+        enqueueSnackbar('Content cannot be empty after cleaning.', { variant: 'warning' });
+        setIsSaving(false);
+        return;
+    }
+
+    try {
+      // Create tale data object using the cleaned HTML
+      const taleData: CreateTalePayload = {
+        title,
+        description,
+        content: cleanedHtml, // Use the thoroughly cleaned content
+        coverImage,
+        tags,
+        // Note: wordCount and readingTime might be inaccurate after cleaning.
+        // Consider recalculating based on cleanedHtml if precision is critical.
+        wordCount,
+        readingTime
+      };
+
+      // Send to backend API using React Query
+      const savedTale = await createTale(taleData);
+
+      console.log('Tale saved successfully:', savedTale);
+
+      // Clear local storage after successful save (optional)
+      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+      // localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+      // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER); // Also consider clearing cover, description, tags
+      // localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+
+
+      // Set last saved time
+      setLastSaved(new Date());
+
+      // Show success message
+      enqueueSnackbar('Tale saved successfully!', { variant: 'success' });
+
+      // Optionally redirect to the tale view page
+      // history.push(`/tales/${savedTale.id}`);
+    } catch (error) {
+      console.error('Error saving tale:', error);
+      // Provide more specific error feedback if possible
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      enqueueSnackbar(`Failed to save tale: ${errorMessage}`, { variant: 'error' });
+    } finally {
       setIsSaving(false);
-    }, 1000);
+    }
   };
 
   if (!editor) return null;

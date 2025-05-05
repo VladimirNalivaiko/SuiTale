@@ -4,8 +4,8 @@ import * as fs from 'fs';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 
 const client = new WalrusClient({
-    network: 'testnet',
-    suiClient,
+    network: 'testnet' as 'testnet' | 'mainnet',
+    suiClient: suiClient as any, // Type assertion to bypass incompatible version issue
 });
 
 export async function uploadTale(
@@ -32,6 +32,49 @@ export async function uploadTale(
         console.error('Upload failed:', message);
         throw error;
     }
+}
+
+/**
+ * Store HTML content directly on Walrus network
+ * @param content HTML content as string
+ * @returns The blob ID for the stored content
+ */
+export async function storeContentOnWalrus(content: string): Promise<string> {
+    try {
+        // Convert string to Uint8Array
+        const encoder = new TextEncoder();
+        const contentBytes = encoder.encode(content);
+        
+        // Get keypair for signing (you might want to handle this differently)
+        const keyPair = await getKeypairForUpload();
+        
+        console.log('Uploading content to Walrus...');
+        const { blobId } = await client.writeBlob({
+            signer: keyPair,
+            blob: contentBytes,
+            deletable: false,
+            epochs: 3, // Adjust as needed
+        });
+
+        console.log('Content stored with Blob ID:', blobId);
+        console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
+        return blobId;
+    } catch (error) {
+        let message = 'Unknown Error';
+        if (error instanceof Error) message = error.message;
+        console.error('Content storage failed:', message);
+        throw error;
+    }
+}
+
+/**
+ * Helper function to get a keypair for upload
+ * This is a placeholder - implement according to your auth flow
+ */
+async function getKeypairForUpload(): Promise<Ed25519Keypair> {
+    // This should be replaced with your actual logic to get a keypair
+    // Consider loading from env variables, secure storage, or user wallet
+    return Ed25519Keypair.generate();
 }
 
 export async function getTale(blobId: string): Promise<string> {
