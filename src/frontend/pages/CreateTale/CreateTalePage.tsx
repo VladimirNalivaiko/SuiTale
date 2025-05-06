@@ -59,6 +59,7 @@ const CreateTalePage: React.FC = () => {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
+  const [isUploadingCover, setIsUploadingCover] = useState<boolean>(false);
   
   // States for metadata
   const [description, setDescription] = useState<string>('');
@@ -184,24 +185,26 @@ const CreateTalePage: React.FC = () => {
   const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      setIsUploadingCover(true);
       try {
-        // For immediate preview, still use FileReader
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const imageDataUrl = e.target?.result as string;
-          setCoverImage(imageDataUrl);
-          localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, imageDataUrl);
-          setLastSaved(new Date());
-        };
-        reader.readAsDataURL(file);
-        
-        // In the background, upload to the server
-        // This is optional - you can choose to upload only when saving the tale
-        // const { coverImage: serverCoverImage } = await uploadCover(file);
-        // setCoverImage(serverCoverImage);
+        // Upload to the server using the useUploadCoverImage hook's mutation
+        const uploadResponse = await uploadCover(file); 
+        const serverCoverImageUrl = uploadResponse.coverImage; // This is the base64 data URL from the server
+
+        setCoverImage(serverCoverImageUrl); // Update state with server-provided URL
+        localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, serverCoverImageUrl);
+        setLastSaved(new Date());
+        enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
+
       } catch (error) {
         console.error('Error uploading cover image:', error);
-        enqueueSnackbar('Failed to upload cover image', { variant: 'error' });
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
+        enqueueSnackbar(`Failed to upload cover image: ${errorMessage}`, { variant: 'error' });
+        // Optionally, clear the cover image if upload fails or revert to a placeholder/previous one
+        // setCoverImage(''); 
+        // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
+      } finally {
+        setIsUploadingCover(false);
       }
     }
   };
@@ -313,6 +316,7 @@ const CreateTalePage: React.FC = () => {
         readingTime={readingTime}
         lastSaved={lastSaved}
         isSaving={isSaving}
+        isUploadingCover={isUploadingCover}
         onTogglePreview={togglePreview}
         onToggleMetadata={toggleMetadata}
         onSave={handleSave}

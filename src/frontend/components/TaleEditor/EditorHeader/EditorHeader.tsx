@@ -19,6 +19,7 @@ interface EditorHeaderProps {
   readingTime: number;
   lastSaved: Date | null;
   isSaving: boolean;
+  isUploadingCover?: boolean;
   onTogglePreview: () => void;
   onToggleMetadata: () => void;
   onSave: () => void;
@@ -29,6 +30,7 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
   readingTime,
   lastSaved,
   isSaving,
+  isUploadingCover,
   onTogglePreview,
   onToggleMetadata,
   onSave
@@ -101,8 +103,9 @@ const EditorHeader: React.FC<EditorHeaderProps> = ({
           size="small"
           onClick={onSave}
           startIcon={<SaveIcon />}
+          disabled={isSaving || isUploadingCover}
         >
-          Publish
+          {isSaving ? 'Publishing...' : (isUploadingCover ? 'Uploading Cover...' : 'Publish')}
         </Button>
       </Box>
     </Box>
