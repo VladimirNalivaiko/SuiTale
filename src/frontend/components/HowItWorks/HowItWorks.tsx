@@ -1,6 +1,5 @@
 import React from 'react';
 import { Box, Container, Grid, Paper, Typography } from '@mui/material';
-import { HowItWorksStep } from '../../types';
 import { howItWorksSteps } from '../../data';
 
 export const HowItWorks: React.FC = () => {
