@@ -21,14 +21,14 @@ export class TalesService {
     async create(createTaleDto: CreateTaleDto): Promise<Tale> {
         try {
             // Store content on Walrus
-            const contentCid = await this.walrusService.uploadTale(
+            const blobId = await this.walrusService.uploadTale(
                 createTaleDto.content,
             );
 
-            // Create new tale with content CID
+            // Create new tale with BlobId
             const newTale = new this.taleModel({
                 ...createTaleDto,
-                contentCid, // Store CID instead of full content
+                blobId: blobId, // Store BlobId instead of full content
             });
 
             return await newTale.save();
@@ -73,17 +73,13 @@ export class TalesService {
      * @param id Tale ID
      * @returns Full tale with content
      */
-    async getFullTale(id: string): Promise<any> {
+    async getFullTale(id: string): Promise<Tale> {
         const tale = await this.findOne(id);
 
         // Fetch content from Walrus
-        const content = await this.walrusService.getContent(tale.contentCid);
-
+        tale.content = await this.walrusService.getContent(tale.blobId);
         // Return tale with full content
-        return {
-            ...tale.toJSON(),
-            content,
-        };
+        return tale;
     }
 
     /**
