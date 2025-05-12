@@ -1,19 +1,46 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, CircularProgress, Container, Typography, Alert, Button, Paper, Chip } from '@mui/material';
+import { Box, CircularProgress, Container, Typography, Alert, Button, Paper, Chip, Skeleton, Grid } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { DefaultLayout } from '../../layouts';
 import { useTaleWithContent } from '../../hooks/useTales';
-import { TaleWithContent } from '../../api/tales.api'; // Import the type
+import { TaleWithContent } from '../../api/tales.api';
+
+// Skeleton Component for Tale Detail Page
+const TaleDetailSkeleton: React.FC = () => (
+  <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+    <Skeleton variant="rectangular" width="100%" height={300} sx={{ borderRadius: '4px', mb: 3 }} />
+    <Skeleton variant="text" sx={{ fontSize: '2.5rem' }} width="70%" /> {/* Mimic h3 */}
+    <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mt: 1 }}>
+      <Skeleton variant="text" width={100} />
+      <Skeleton variant="text" width={20} />
+      <Skeleton variant="text" width={80} />
+    </Box>
+    <Box sx={{ mb: 3 }}>
+      <Skeleton variant="rounded" width={60} height={24} sx={{ mr: 1, display: 'inline-block' }} />
+      <Skeleton variant="rounded" width={70} height={24} sx={{ mr: 1, display: 'inline-block' }} />
+    </Box>
+    <Skeleton variant="text" sx={{ fontSize: '1rem', mb: 1 }} />
+    <Skeleton variant="text" sx={{ fontSize: '1rem', mb: 1 }} />
+    <Skeleton variant="text" sx={{ fontSize: '1rem', mb: 3 }} width="80%" />
+    
+    <Skeleton variant="rectangular" width="100%" height={50} sx={{ mt: 3, mb: 1.5 }}/>
+    <Skeleton variant="text" sx={{ mb: 1 }} />
+    <Skeleton variant="text" sx={{ mb: 1 }} />
+    <Skeleton variant="text" width="90%" sx={{ mb: 1 }}/>
+    <Skeleton variant="rectangular" width="100%" height={50} sx={{ mt: 3, mb: 1.5 }}/>
+    <Skeleton variant="text" sx={{ mb: 1 }} />
+    <Skeleton variant="text" sx={{ mb: 1 }} />
+    <Skeleton variant="text" width="90%" sx={{ mb: 1 }}/>
+  </Paper>
+);
 
 const TaleDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
-  // Ensure id is not undefined before calling the hook
-  const { data: tale, isLoading, error, isError } = useTaleWithContent(id!, {
-    enabled: !!id, // Only run the query if id is available
-  });
+  // Removed the options object, relying on default behavior for undefined id in queryKey
+  const { data: tale, isLoading, error, isError } = useTaleWithContent(id!); 
 
   if (!id) {
     return (
@@ -31,9 +58,16 @@ const TaleDetailPage: React.FC = () => {
   if (isLoading) {
     return (
       <DefaultLayout>
-        <Container maxWidth="md" sx={{ py: 4, textAlign: 'center' }}>
-          <CircularProgress />
-          <Typography sx={{ mt: 2 }}>Loading tale content...</Typography>
+        <Container maxWidth="md" sx={{ py: 4 }}>
+          <Button 
+            variant="outlined" 
+            onClick={() => navigate('/tales')} 
+            startIcon={<ArrowBackIcon />} 
+            sx={{ mb: 3 }}
+          >
+            Back to All Tales
+          </Button>
+          <TaleDetailSkeleton />
         </Container>
       </DefaultLayout>
     );
@@ -67,10 +101,6 @@ const TaleDetailPage: React.FC = () => {
     );
   }
 
-  // Assuming tale.content is HTML string. For security, ensure it's sanitized if it comes from user input.
-  // If it's plain text, you might want to format it (e.g., preserve newlines).
-  // For Markdown, you'd use a Markdown parser.
-  // Here, we'll use dangerouslySetInnerHTML for HTML content. Be cautious with this.
   const createMarkup = (htmlString: string) => {
     return { __html: htmlString };
   };
@@ -80,7 +110,7 @@ const TaleDetailPage: React.FC = () => {
       <Container maxWidth="md" sx={{ py: 4 }}>
         <Button 
           variant="outlined" 
-          onClick={() => navigate('/tales')} // Or navigate(-1) to go back to the previous page
+          onClick={() => navigate('/tales')} 
           startIcon={<ArrowBackIcon />} 
           sx={{ mb: 3 }}
         >
@@ -130,19 +160,46 @@ const TaleDetailPage: React.FC = () => {
             {tale.description}
           </Typography>
           
-          {/* Render the main content */}
-          {/* Consider using a library to safely render HTML or Markdown */}
-          <Box 
-            className="tale-content" // For potential global styling
-            sx={{ 
-              mt: 3,
-              '& p': { lineHeight: '1.6', mb: 2 }, // Example styling for paragraphs
-              '& h1, & h2, & h3, & h4, & h5, & h6': { mt: 3, mb: 1.5 }, // Example styling for headers
-              '& img': { maxWidth: '100%', height: 'auto', borderRadius: '4px', my: 2 }, // Example styling for images in content
-              '& a': { color: 'primary.main', textDecoration: 'underline' } // Example styling for links
-            }}
-            dangerouslySetInnerHTML={createMarkup(tale.content)} 
-          />
+          {(!tale.content || tale.content.trim() === '') ? (
+            <Alert severity="info" sx={{mt: 3}}>The content for this tale is currently empty.</Alert>
+          ) : (
+            <Box 
+              className="tale-content" 
+              sx={{ 
+                mt: 3,
+                fontSize: '1rem', // Base font size for content
+                '& p': { lineHeight: '1.7', mb: '1.25em' }, 
+                '& h1, & h2, & h3, & h4, & h5, & h6': { mt: '1.5em', mb: '0.75em', lineHeight: '1.3' },
+                '& h1': { fontSize: '2.2rem' },
+                '& h2': { fontSize: '1.8rem' },
+                '& h3': { fontSize: '1.5rem' },
+                '& img': { maxWidth: '100%', height: 'auto', borderRadius: '4px', my: '1.5em', display: 'block', marginLeft: 'auto', marginRight: 'auto' },
+                '& a': { color: 'primary.main', textDecoration: 'underline', '&:hover': { textDecoration: 'none' } },
+                '& ul, & ol': { pl: '2em', mb: '1.25em', '& li': { mb: '0.5em', lineHeight: '1.6' } },
+                '& blockquote': { borderLeft: '4px solid', borderColor: 'divider', pl: '1em', ml: 0, my: '1.5em', fontStyle: 'italic', color: 'text.secondary' },
+                '& pre': { 
+                  backgroundColor: 'action.hover', 
+                  padding: '1em', 
+                  borderRadius: '4px', 
+                  overflowX: 'auto', 
+                  fontSize: '0.9em', 
+                  lineHeight: '1.5', 
+                  my: '1.5em' 
+                },
+                '& code': { 
+                  backgroundColor: 'action.hover', 
+                  padding: '0.2em 0.4em', 
+                  borderRadius: '3px', 
+                  fontSize: '0.9em', 
+                  fontFamily: 'monospace'
+                },
+                '& table': { width: '100%', borderCollapse: 'collapse', my: '1.5em' },
+                '& th, & td': { border: '1px solid', borderColor: 'divider', padding: '0.5em 0.75em', textAlign: 'left' },
+                '& th': { backgroundColor: 'action.focus' }
+              }}
+              dangerouslySetInnerHTML={createMarkup(tale.content)} 
+            />
+          )}
         </Paper>
       </Container>
     </DefaultLayout>

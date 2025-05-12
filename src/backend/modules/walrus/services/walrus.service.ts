@@ -114,6 +114,7 @@ export class WalrusService {
                 blob: contentBytes,
                 deletable: false,
                 epochs: 3,
+                
             });
 
             console.log('Blob ID:', blobId);
