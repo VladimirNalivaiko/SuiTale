@@ -1,92 +1,194 @@
-import React from 'react';
-import { Container, Grid, Typography, Box } from '@mui/material';
-import { TaleCard, TaleSearch, TaleSort, TaleFilters } from '../../components/Tales';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Box, Button, CircularProgress, Container, Grid, Typography, Alert, Skeleton } from '@mui/material';
 import { DefaultLayout } from '../../layouts';
+import { useTales } from '../../hooks/useTales';
+import { Tale } from '../../api/tales.api'; // Import Tale type from the api
 
-const mockTales = [
-  {
-    id: 1,
-    title: 'The Last Dragon',
-    author: 'John Smith',
-    image: '',
-    readCount: 1234,
-    likes: 567,
-  },
-  {
-    id: 2,
-    title: 'Space Odyssey',
-    author: 'Jane Doe',
-    image: '',
-    readCount: 2345,
-    likes: 789,
-  },
-  {
-    id: 3,
-    title: 'Mystery of the Old House',
-    author: 'Bob Johnson',
-    image: '',
-    readCount: 3456,
-    likes: 890,
-  },
-  {
-    id: 4,
-    title: 'Love in Paris',
-    author: 'Alice Brown',
-    image: '',
-    readCount: 4567,
-    likes: 901,
-  },
-  {
-    id: 5,
-    title: 'The Lost Treasure',
-    author: 'Charlie Wilson',
-    image: '',
-    readCount: 5678,
-    likes: 234,
-  },
-  {
-    id: 6,
-    title: 'Haunted Mansion',
-    author: 'Diana Clark',
-    image: '',
-    readCount: 6789,
-    likes: 345,
-  },
-];
+const TALES_PER_PAGE = 12;
+
+// Skeleton Card Component
+const TaleCardSkeleton: React.FC = () => (
+  <Box
+    sx={{
+      border: '1px solid #ddd',
+      borderRadius: '8px',
+      padding: '16px',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%', // Ensure skeleton cards also have consistent height if needed
+    }}
+  >
+    <Skeleton variant="rectangular" width="100%" height={150} sx={{ borderRadius: '4px', marginBottom: '12px' }} />
+    <Skeleton variant="text" sx={{ fontSize: '1.25rem' }} width="80%" /> {/* Mimic h6, adjust width as needed */}
+    <Skeleton variant="text" sx={{ fontSize: '0.875rem', mt: 1 }} /> {/* Mimic body2 */}
+    <Skeleton variant="text" sx={{ fontSize: '0.875rem' }} width="60%" />
+  </Box>
+);
 
 const TalesPage: React.FC = () => {
+  const [allTales, setAllTales] = useState<Tale[]>([]);
+  const [currentOffset, setCurrentOffset] = useState<number>(0);
+  const [hasMoreToLoad, setHasMoreToLoad] = useState<boolean>(true);
+  const navigate = useNavigate();
+
+  const { 
+    data: newTales,
+    isLoading, 
+    isFetching,
+    error,
+    isError 
+  } = useTales(TALES_PER_PAGE, currentOffset);
+
+  useEffect(() => {
+    if (newTales && newTales.length > 0) {
+      setAllTales((prevTales) => {
+        const existingIds = new Set(prevTales.map(t => t.id));
+        const uniqueNewTales = newTales.filter(t => !existingIds.has(t.id));
+        return [...prevTales, ...uniqueNewTales]; 
+      });
+      if (newTales.length < TALES_PER_PAGE) {
+        setHasMoreToLoad(false);
+      }
+    } else if (newTales && newTales.length === 0 && currentOffset > 0) {
+      setHasMoreToLoad(false);
+    }
+  }, [newTales]);
+
+
+  const loadMoreTales = () => {
+    if (hasMoreToLoad && !isFetching) {
+      setCurrentOffset(prevOffset => prevOffset + TALES_PER_PAGE);
+    }
+  };
+
+  const handleTaleClick = (taleId: string) => {
+    navigate(`/tale/${taleId}`);
+  };
+
+  interface TaleCardProps {
+    tale: Tale; 
+    onClick: (id: string) => void;
+  }
+
+  const TaleCard: React.FC<TaleCardProps> = ({ tale, onClick }) => (
+    <Box
+      sx={{
+        border: '1px solid #ddd',
+        borderRadius: '8px',
+        padding: '16px',
+        cursor: 'pointer',
+        transition: 'box-shadow 0.3s ease-in-out',
+        '&:hover': {
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+        },
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+      }}
+      onClick={() => onClick(String(tale.id))} 
+    >
+      {tale.coverImage && (
+        <Box
+          component="img"
+          src={tale.coverImage}
+          alt={tale.title}
+          sx={{
+            width: '100%',
+            height: '150px', 
+            objectFit: 'cover',
+            borderRadius: '4px',
+            marginBottom: '12px',
+          }}
+        />
+      )}
+      <Typography variant="h6" component="h3" gutterBottom>
+        {tale.title}
+      </Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+        {tale.description || 'No summary available.'}
+      </Typography>
+    </Box>
+  );
+
+  // Show skeletons during initial load
+  if (isLoading && currentOffset === 0) {
+    return (
+      <DefaultLayout>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Typography variant="h3" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
+            All Tales
+          </Typography>
+          <Grid container spacing={3}>
+            {Array.from(new Array(6)).map((_, index) => ( // Show 6 skeletons, for example
+              <Grid item xs={12} sm={6} md={4} key={`skeleton-${index}`}>
+                <TaleCardSkeleton />
+              </Grid>
+            ))}
+          </Grid>
+        </Container>
+      </DefaultLayout>
+    );
+  }
+
+  if (isError && error) {
+    return (
+      <DefaultLayout>
+        <Container maxWidth="lg" sx={{ py: 4 }}>
+          <Typography variant="h3" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
+            All Tales
+          </Typography>
+          <Alert severity="error" sx={{mt: 2}}>
+            Failed to load tales: {error instanceof Error ? error.message : 'An unknown error occurred.'}
+          </Alert>
+        </Container>
+      </DefaultLayout>
+    );
+  }
+  
   return (
     <DefaultLayout>
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom>
+        <Typography variant="h3" component="h1" gutterBottom align="center" sx={{ mb: 4 }}>
           All Tales
         </Typography>
+        
+        {allTales.length === 0 && !isFetching && !hasMoreToLoad && (
+           <Typography variant="h6" align="center" sx={{ my: 4 }}>
+            No tales found. Check back later!
+          </Typography>
+        )}
 
         <Grid container spacing={3}>
-          <Grid item xs={12} md={8}>
-            <TaleSearch />
-          </Grid>
-          <Grid item xs={12} md={4}>
-            <TaleSort />
-          </Grid>
-          <Grid item xs={12}>
-            <TaleFilters />
-          </Grid>
-          <Grid item xs={12}>
-            <Box sx={{ mt: 3 }}>
-              <Grid container spacing={3}>
-                {mockTales.map((tale) => (
-                  <Grid item xs={12} sm={6} md={4} key={tale.id}>
-                    <TaleCard tale={tale} />
-                  </Grid>
-                ))}
-              </Grid>
-            </Box>
-          </Grid>
+          {allTales.map((tale) => (
+            <Grid item xs={12} sm={6} md={4} key={tale.id}> 
+              <TaleCard tale={tale} onClick={handleTaleClick} />
+            </Grid>
+          ))}
         </Grid>
+
+        {/* Show CircularProgress for subsequent fetches (load more) */}
+        {isFetching && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+            <CircularProgress />
+          </Box>
+        )}
+
+        {hasMoreToLoad && !isFetching && allTales.length > 0 && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+            <Button variant="contained" onClick={loadMoreTales} disabled={isFetching}>
+              Get more
+            </Button>
+          </Box>
+        )}
+        {!hasMoreToLoad && allTales.length > 0 && !isFetching && (
+          <Typography variant="body1" align="center" sx={{ my: 4, color: 'text.secondary' }}>
+            You've reached the end of the tales.
+          </Typography>
+        )}
       </Container>
     </DefaultLayout>
   );
 };
 
-export default TalesPage;
+export default TalesPage; 

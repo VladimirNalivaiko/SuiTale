@@ -31,6 +31,9 @@ export class TalesService {
                 blobId: blobId, // Store BlobId instead of full content
             });
 
+            console.log(newTale)
+            console.log('Saving tale to DB')
+
             return await newTale.save();
         } catch (error) {
             console.error('Error creating tale:', error);
@@ -75,6 +78,10 @@ export class TalesService {
      */
     async getFullTale(id: string): Promise<Tale> {
         const tale = await this.findOne(id);
+
+
+        console.log(id)
+        console.log(tale.blobId)
 
         // Fetch content from Walrus
         tale.content = await this.walrusService.getContent(tale.blobId);

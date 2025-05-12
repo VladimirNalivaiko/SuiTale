@@ -6,3 +6,4 @@ export { default as UserProfilePage } from './UserProfile/UserProfilePage';
 export { default as TalesPage } from './Tales/TalesPage';
 export { default as TalePage } from './Tale/TalePage';
 export { default as CreateTalePage } from './CreateTale/CreateTalePage';
+export { default as TaleDetailPage } from './TaleDetail/TaleDetailPage';
