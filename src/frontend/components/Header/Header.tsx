@@ -23,6 +23,7 @@ import SuiTaleIcon from '../../assets/images/SuiTaleIcon.png';
 import { navigationLinks } from '../../data';
 import { generatePath, useNavigate } from "react-router-dom";
 import { useAppTheme } from '../../contexts/ThemeContext';
+import { ROUTES } from '../../types/constants';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -45,7 +46,12 @@ export const Header: React.FC = () => {
   return (
     <AppBar position="static" color="default" elevation={0} sx={{ bgcolor: 'transparent' }}>
       <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
-        <Box display="flex" alignItems="center" sx={{ flexGrow: 1 }}>
+        <Box
+          display="flex"
+          alignItems="center"
+          sx={{ flexGrow: 1, cursor: 'pointer' }}
+          onClick={() => navigate(ROUTES.INITIAL_ROUTE)}
+        >
           <Avatar
             src={SuiTaleIcon}
             alt="SuiTale Logo"
