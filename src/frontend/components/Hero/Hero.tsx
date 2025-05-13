@@ -1,16 +1,15 @@
 import React from 'react';
-import { Box, Button, Container, Stack, Typography, Grid } from '@mui/material';
+import { Box, Button, Container, Stack, Typography, Grid, useTheme } from '@mui/material';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 
 export const Hero: React.FC = () => {
+  const theme = useTheme();
+
   return (
     <Box
       sx={{
-        background: 'linear-gradient(135deg, #f5f7ff 0%, #e8eaff 100%)',
-        color: "#111",
         py: { xs: 6, md: 10 },
         overflow: 'hidden',
-        height: {xs: '90vh', sm: '75vh', md: ''},
       }}
     >
       <Container maxWidth="lg">
@@ -35,7 +34,7 @@ export const Hero: React.FC = () => {
                 variant="body1" 
                 sx={{ 
                   mb: 4,
-                  color: 'text.primary',
+                  color: 'text.secondary',
                   fontSize: '1.1rem',
                   lineHeight: 1.5
                 }}
@@ -87,28 +86,27 @@ export const Hero: React.FC = () => {
                 sx={{
                   width: { xs: '70%', md: '60%' },
                   height: 'auto',
-                  bgcolor: 'white',
+                  bgcolor: 'background.paper',
                   borderRadius: 3,
-                  boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
+                  boxShadow: theme.shadows[3],
                   p: 2,
                   position: 'relative',
                   zIndex: 1,
                   mr: { xs: 0, md: -10 },
                   mt: { xs: 0, md: -5 },
-                  border: '1px solid #eaeaea',
+                  border: `1px solid ${theme.palette.divider}`,
                   transition: 'transform 0.3s ease-in-out',
                   '&:hover': {
                     transform: 'translateX(-15px)'
                   }
                 }}
               >
-                {/* Here could be icons and statistics as in the picture */}
                 <Box sx={{ height: '280px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                   <Box>
                     <Typography 
                       variant="caption" 
                       sx={{ 
-                        color: 'text.primary', 
+                        color: 'text.primary',
                         fontSize: '1.2rem', 
                         display: 'block',
                         mb: 1,
@@ -123,8 +121,8 @@ export const Hero: React.FC = () => {
                   {[1, 2, 3, 4, 5].map((item) => (
                     <Box key={item} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                       <Box sx={{ width: '16px', height: '16px', borderRadius: '50%', bgcolor: item % 2 === 0 ? 'primary.main' : 'secondary.main', mr: 1 }} />
-                      <Box sx={{ height: '8px', width: '70%', bgcolor: '#f6f6f9', borderRadius: 1 }} />
-                      <Box sx={{ ml: 'auto', height: '16px', width: '16px', borderRadius: '50%', bgcolor: '#f6f6f9' }} />
+                      <Box sx={{ height: '8px', width: '70%', bgcolor: 'action.hover', borderRadius: 1 }} />
+                      <Box sx={{ ml: 'auto', height: '16px', width: '16px', borderRadius: '50%', bgcolor: 'action.hover' }} />
                     </Box>
                   ))}
                 </Box>
@@ -135,28 +133,27 @@ export const Hero: React.FC = () => {
                 sx={{
                   width: { xs: '65%', md: '50%' },
                   height: 'auto',
-                  bgcolor: 'white',
+                  bgcolor: 'background.paper',
                   borderRadius: 3,
-                  boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+                  boxShadow: theme.shadows[5],
                   p: 2,
                   position: 'absolute',
                   top: { xs: '20%', md: '15%' },
                   right: { xs: '5%', md: '10%' },
                   zIndex: 2,
-                  border: '1px solid #eaeaea',
+                  border: `1px solid ${theme.palette.divider}`,
                   transition: 'transform 0.3s ease-in-out',
                   '&:hover': {
                     transform: 'translateX(10px)'
                   }
                 }}
               >
-                {/* Mobile app screen */}
                 <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '320px' }}>
                   <Box sx={{ textAlign: 'center', p: 1 }}>
                     <Typography
                       variant="caption"
                       sx={{
-                        color: 'text.primary', 
+                        color: 'text.primary',
                         fontSize: '1.2rem',
                         fontWeight: 'bold',
                         display: 'flex',
@@ -169,17 +166,17 @@ export const Hero: React.FC = () => {
                   <Box sx={{ px: 1, py: 2 }}>
                     <Box 
                       sx={{ 
-                        bgcolor: 'background.paper', 
+                        bgcolor: 'background.default',
                         p: 2, 
                         borderRadius: 2,
-                        border: '1px solid #eaeaea',
+                        border: `1px solid ${theme.palette.divider}`,
                         mb: 2
                       }}
                     >
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', display: 'block', mb: 1 }}>
                         Featured Tale
                       </Typography>
-                      <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 'bold', fontSize: '0.85rem', mb: 0.5 }}>
+                      <Typography variant="body2" sx={{ color: 'text.primary', fontWeight: 'bold', fontSize: '0.85rem', mb: 0.5 }}>
                         The Sui Chronicles
                       </Typography>
                       <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.65rem', display: 'block' }}>

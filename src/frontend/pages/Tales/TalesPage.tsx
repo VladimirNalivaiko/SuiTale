@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Box, Button, CircularProgress, Container, Grid, Typography, Alert, Skeleton } from '@mui/material';
+import { Box, Button, CircularProgress, Container, Grid, Typography, Alert, Skeleton, useTheme } from '@mui/material';
 import { DefaultLayout } from '../../layouts';
 import { useTales } from '../../hooks/useTales';
 import { Tale } from '../../api/tales.api'; // Import Tale type from the api
@@ -8,29 +8,34 @@ import { Tale } from '../../api/tales.api'; // Import Tale type from the api
 const TALES_PER_PAGE = 12;
 
 // Skeleton Card Component
-const TaleCardSkeleton: React.FC = () => (
-  <Box
-    sx={{
-      border: '1px solid #ddd',
-      borderRadius: '8px',
-      padding: '16px',
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%', // Ensure skeleton cards also have consistent height if needed
-    }}
-  >
-    <Skeleton variant="rectangular" width="100%" height={150} sx={{ borderRadius: '4px', marginBottom: '12px' }} />
-    <Skeleton variant="text" sx={{ fontSize: '1.25rem' }} width="80%" /> {/* Mimic h6, adjust width as needed */}
-    <Skeleton variant="text" sx={{ fontSize: '0.875rem', mt: 1 }} /> {/* Mimic body2 */}
-    <Skeleton variant="text" sx={{ fontSize: '0.875rem' }} width="60%" />
-  </Box>
-);
+const TaleCardSkeleton: React.FC = () => {
+  const theme = useTheme();
+  return (
+    <Box
+      sx={{
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: '8px',
+        padding: '16px',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        backgroundColor: theme.palette.background.paper,
+      }}
+    >
+      <Skeleton variant="rectangular" width="100%" height={150} sx={{ borderRadius: '4px', marginBottom: '12px' }} />
+      <Skeleton variant="text" sx={{ fontSize: '1.25rem' }} width="80%" />
+      <Skeleton variant="text" sx={{ fontSize: '0.875rem', mt: 1 }} />
+      <Skeleton variant="text" sx={{ fontSize: '0.875rem' }} width="60%" />
+    </Box>
+  );
+};
 
 const TalesPage: React.FC = () => {
   const [allTales, setAllTales] = useState<Tale[]>([]);
   const [currentOffset, setCurrentOffset] = useState<number>(0);
   const [hasMoreToLoad, setHasMoreToLoad] = useState<boolean>(true);
   const navigate = useNavigate();
+  const themeHook = useTheme();
 
   const { 
     data: newTales,
@@ -71,45 +76,49 @@ const TalesPage: React.FC = () => {
     onClick: (id: string) => void;
   }
 
-  const TaleCard: React.FC<TaleCardProps> = ({ tale, onClick }) => (
-    <Box
-      sx={{
-        border: '1px solid #ddd',
-        borderRadius: '8px',
-        padding: '16px',
-        cursor: 'pointer',
-        transition: 'box-shadow 0.3s ease-in-out',
-        '&:hover': {
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-        },
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-      onClick={() => onClick(String(tale.id))} 
-    >
-      {tale.coverImage && (
-        <Box
-          component="img"
-          src={tale.coverImage}
-          alt={tale.title}
-          sx={{
-            width: '100%',
-            height: '150px', 
-            objectFit: 'cover',
-            borderRadius: '4px',
-            marginBottom: '12px',
-          }}
-        />
-      )}
-      <Typography variant="h6" component="h3" gutterBottom>
-        {tale.title}
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
-        {tale.description || 'No summary available.'}
-      </Typography>
-    </Box>
-  );
+  const TaleCard: React.FC<TaleCardProps> = ({ tale, onClick }) => {
+    return (
+      <Box
+        sx={{
+          border: `1px solid ${themeHook.palette.divider}`,
+          borderRadius: '8px',
+          padding: '16px',
+          cursor: 'pointer',
+          transition: 'box-shadow 0.3s ease-in-out, transform 0.2s ease-in-out',
+          backgroundColor: themeHook.palette.background.paper,
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          '&:hover': {
+            boxShadow: themeHook.shadows[4],
+            transform: 'translateY(-4px)',
+          },
+        }}
+        onClick={() => onClick(String(tale.id))} 
+      >
+        {tale.coverImage && (
+          <Box
+            component="img"
+            src={tale.coverImage}
+            alt={tale.title}
+            sx={{
+              width: '100%',
+              height: '150px', 
+              objectFit: 'cover',
+              borderRadius: '4px',
+              marginBottom: '12px',
+            }}
+          />
+        )}
+        <Typography variant="h6" component="h3" gutterBottom sx={{ color: 'text.primary' }}>
+          {tale.title}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ flexGrow: 1 }}>
+          {tale.description || 'No summary available.'}
+        </Typography>
+      </Box>
+    );
+  }
 
   // Show skeletons during initial load
   if (isLoading && currentOffset === 0) {

@@ -1,23 +1,38 @@
 import React from 'react';
-import { Box, Container, Typography, Grid } from '@mui/material';
+import { Box, Container, Typography, Grid, useTheme } from '@mui/material';
 
-const SuiLogo = '../../../assets/svg/companies/sui.svg';
-const WalrusLogo = '../../../assets/svg/companies/walrus.svg';
+// Предполагаемые пути к иконкам. Тебе нужно будет их заменить на актуальные.
+const SuiLogoLight = '../../../assets/svg/companies/sui-light.svg'; // Пример для светлой темы
+const SuiLogoDark = '../../../assets/svg/companies/sui-dark.svg';   // Пример для темной темы
+const WalrusLogoLight = '../../../assets/svg/companies/walrus-light.svg';
+const WalrusLogoDark = '../../../assets/svg/companies/walrus-dark.svg';
 
-// Логотипы компаний
+// Обновленная структура для логотипов компаний
 const companyLogos = [
-  { id: 1, name: 'Sui', logoUrl: SuiLogo },
-  { id: 2, name: 'Walrus', logoUrl: WalrusLogo },
+  { 
+    id: 1, 
+    name: 'Sui', 
+    logoUrlLight: SuiLogoLight, // Используй текущий SuiLogo как light версию
+    logoUrlDark: SuiLogoDark    // Сюда добавишь путь к темной версии Sui лого
+  },
+  { 
+    id: 2, 
+    name: 'Walrus', 
+    logoUrlLight: WalrusLogoLight, // Используй текущий WalrusLogo как light версию
+    logoUrlDark: WalrusLogoDark     // Сюда добавишь путь к темной версии Walrus лого
+  },
+  // Добавляй другие компании по аналогии
 ];
 
 export const TrustedBy: React.FC = () => {
+  const theme = useTheme();
+  const currentMode = theme.palette.mode;
+
   return (
     <Box 
       sx={{ 
         py: 4, 
-        bgcolor: 'background.paper',
-        borderBottom: '1px solid',
-        borderColor: 'divider'
+        bgcolor: 'background.default',
       }}
     >
       <Container maxWidth="lg">
@@ -40,33 +55,40 @@ export const TrustedBy: React.FC = () => {
           spacing={3} 
           justifyContent="center"
           alignItems="center"
-          sx={{ opacity: 0.8 }}
         >
-          {companyLogos.map((company) => (
-            <Grid item key={company.id} xs={4} sm={2}>
-              <Box 
-                sx={{ 
-                  height: 40, 
-                  display: 'flex', 
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                {/* Here will be the logo */}
+          {companyLogos.map((company) => {
+            const logoUrl = currentMode === 'light' ? company.logoUrlLight : company.logoUrlDark;
+            return (
+              <Grid item key={company.id} xs={6} sm={4} md={3} lg={2}>
                 <Box 
                   sx={{ 
-                    width: 100, 
-                    height: 40,
-                    borderRadius: 1 ,
-                    backgroundImage:`url(${company.logoUrl})`,
-                    backgroundSize: 'contain',
-                    backgroundPosition: 'center',
-                    backgroundRepeat: 'no-repeat',
+                    height: 40, 
+                    display: 'flex', 
+                    alignItems: 'center',
+                    justifyContent: 'center',
                   }}
-                />
-              </Box>
-            </Grid>
-          ))}
+                >
+                  <Box 
+                    sx={{
+                      width: '100%',
+                      maxWidth: 120, 
+                      height: '100%',
+                      borderRadius: 1 ,
+                      backgroundImage:`url(${logoUrl})`,
+                      backgroundSize: 'contain',
+                      backgroundPosition: 'center',
+                      backgroundRepeat: 'no-repeat',
+                      transition: 'opacity 0.3s ease-in-out',
+                      opacity: 0.85,
+                      '&:hover': {
+                        opacity: 1,
+                      }
+                    }}
+                  />
+                </Box>
+              </Grid>
+            );
+          })}
         </Grid>
         
         <Typography 

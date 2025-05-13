@@ -12,8 +12,6 @@ export const Sponsors: React.FC = () => {
     <Box 
       sx={{ 
         py: 8,
-        borderTop: '1px solid',
-        borderColor: 'divider'
       }}
     >
       <Container maxWidth="lg">

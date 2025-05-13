@@ -8,7 +8,7 @@ import { TaleWithContent } from '../../api/tales.api';
 
 // Skeleton Component for Tale Detail Page
 const TaleDetailSkeleton: React.FC = () => (
-  <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 }, backgroundColor: '#ffffff' }}>
+  <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 }, backgroundColor: 'background.paper' }}>
     <Skeleton variant="rectangular" width="100%" height={300} sx={{ borderRadius: '4px', mb: 3 }} />
     <Skeleton variant="text" sx={{ fontSize: '2.5rem' }} width="70%" /> {/* Mimic h3 */}
     <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mt: 1 }}>
@@ -45,7 +45,7 @@ const TaleDetailPage: React.FC = () => {
   if (!id) {
     return (
       <DefaultLayout>
-        <Container maxWidth="md" sx={{ py: 4, backgroundColor: '#ffffff' }}>
+        <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="error">Tale ID is missing. Cannot load the tale.</Alert>
           <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
             Go Back
@@ -58,7 +58,7 @@ const TaleDetailPage: React.FC = () => {
   if (isLoading) {
     return (
       <DefaultLayout>
-        <Container maxWidth="md" sx={{ py: 4, backgroundColor: '#ffffff' }}>
+        <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Button 
             variant="outlined" 
             onClick={() => navigate('/tales')} 
@@ -76,7 +76,7 @@ const TaleDetailPage: React.FC = () => {
   if (isError && error) {
     return (
       <DefaultLayout>
-        <Container maxWidth="md" sx={{ py: 4, backgroundColor: '#ffffff' }}>
+        <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="error">
             Failed to load tale: {error instanceof Error ? error.message : 'An unknown error occurred.'}
           </Alert>
@@ -91,7 +91,7 @@ const TaleDetailPage: React.FC = () => {
   if (!tale) {
     return (
       <DefaultLayout>
-        <Container maxWidth="md" sx={{ py: 4, backgroundColor: '#ffffff' }}>
+        <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="info">Tale not found.</Alert>
            <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
             Go Back
@@ -107,7 +107,7 @@ const TaleDetailPage: React.FC = () => {
 
   return (
     <DefaultLayout>
-      <Container maxWidth="md" sx={{ py: 4, backgroundColor: '#ffffff' }}>
+      <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
         <Button 
           variant="outlined" 
           onClick={() => navigate('/tales')} 
@@ -117,7 +117,7 @@ const TaleDetailPage: React.FC = () => {
           Back to All Tales
         </Button>
         
-        <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 }, backgroundColor: '#ffffff' /* Ensuring Paper is also white */ }}>
+        <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 }, backgroundColor: 'background.paper' /* Ensuring Paper uses theme color */ }}>
           {tale.coverImage && (
             <Box
               component="img"

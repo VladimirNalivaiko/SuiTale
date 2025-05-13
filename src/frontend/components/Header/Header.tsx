@@ -13,16 +13,22 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  useTheme,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import CloseIcon from '@mui/icons-material/Close';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
 import SuiTaleIcon from '../../assets/images/SuiTaleIcon.png';
 import { navigationLinks } from '../../data';
 import { generatePath, useNavigate } from "react-router-dom";
+import { useAppTheme } from '../../contexts/ThemeContext';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { mode, toggleTheme, theme: appTheme } = useAppTheme();
+  const muiTheme = useTheme();
 
   const handleMobileMenuOpen = (event: React.MouseEvent) => {
     setMobileMenuOpen(true);
@@ -37,7 +43,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <AppBar position="static" color="transparent" elevation={0}>
+    <AppBar position="static" color="default" elevation={0} sx={{ bgcolor: 'transparent' }}>
       <Toolbar sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 2 }}>
         <Box display="flex" alignItems="center" sx={{ flexGrow: 1 }}>
           <Avatar
@@ -54,7 +60,7 @@ export const Header: React.FC = () => {
           {navigationLinks.map((link) => (
             <Button 
               key={link.path} 
-              color="inherit"
+              sx={{ color: 'text.primary' }}
               onClick={() => handleMenuItemClick(link.path)}
             >
               {link.title}
@@ -71,8 +77,12 @@ export const Header: React.FC = () => {
             Connect Wallet
           </Button>
 
+          <IconButton onClick={toggleTheme} color="inherit">
+            {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+          </IconButton>
+
           <IconButton
-            sx={{ display: { md: 'none' } }}
+            sx={{ display: { md: 'none' }, color: 'text.primary' }}
             onClick={handleMobileMenuOpen}
           >
             <MenuIcon />
@@ -87,7 +97,7 @@ export const Header: React.FC = () => {
             '& .MuiDrawer-paper': {
               width: 280,
               boxSizing: 'border-box',
-              backgroundColor: '#ffffff',
+              backgroundColor: appTheme.palette.background.paper,
             },
           }}
         >
@@ -97,9 +107,10 @@ export const Header: React.FC = () => {
               justifyContent: 'flex-end',
               alignItems: 'center',
               p: 1.5,
+              borderBottom: `1px solid ${appTheme.palette.divider}`,
             }}
           >
-            <IconButton onClick={handleMobileMenuClose}>
+            <IconButton onClick={handleMobileMenuClose} sx={{ color: 'text.primary' }}>
               <CloseIcon />
             </IconButton>
           </Box>
@@ -115,7 +126,7 @@ export const Header: React.FC = () => {
                     py: 2,
                     px: 3,
                     '&:hover': {
-                      bgcolor: 'action.hover',
+                      bgcolor: appTheme.palette.action.hover,
                     },
                   }}
                 >
@@ -125,10 +136,11 @@ export const Header: React.FC = () => {
                       variant: 'body1',
                       fontWeight: 'medium',
                       fontSize: '1.1rem',
+                      color: appTheme.palette.text.primary,
                     }}
                   />
                 </ListItem>
-                {index < navigationLinks.length - 1 && <Divider />}
+                {index < navigationLinks.length - 1 && <Divider sx={{ bgcolor: appTheme.palette.divider }} />}
               </React.Fragment>
             ))}
           </List>
