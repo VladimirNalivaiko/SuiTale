@@ -69,6 +69,8 @@ export const howItWorksSteps: HowItWorksStep[] = [
 
 export const navigationLinks: NavigationLink[] = [
   { title: "Home", path: ROUTES.INITIAL_ROUTE },
+  { title: "Tales", path: ROUTES.TALES },
+  { title: "Create Tale", path: ROUTES.CREATE_TALE },
 ];
 
 export const resourceLinks: ResourceLink[] = [

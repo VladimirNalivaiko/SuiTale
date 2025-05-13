@@ -12,8 +12,10 @@ import {
   List,
   ListItem,
   ListItemText,
+  Divider,
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
 import SuiTaleIcon from '../../assets/images/SuiTaleIcon.png';
 import { navigationLinks } from '../../data';
 import { generatePath, useNavigate } from "react-router-dom";
@@ -78,39 +80,56 @@ export const Header: React.FC = () => {
         </Box>
 
         <Drawer
-          anchor="top"
+          anchor="right"
           open={mobileMenuOpen}
           onClose={handleMobileMenuClose}
           sx={{
             '& .MuiDrawer-paper': {
-              width: '100%',
-              position: 'fixed',
-              top: 64,
-              boxShadow: 3,
+              width: 280,
+              boxSizing: 'border-box',
+              backgroundColor: '#ffffff',
             },
           }}
         >
-          <List>
-            {navigationLinks.map((link) => (
-              <ListItem
-                key={link.path}
-                onClick={() => handleMenuItemClick(link.path)}
-                sx={{
-                  py: 2,
-                  px: 3,
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                }}
-              >
-                <ListItemText
-                  primary={link.title}
-                  primaryTypographyProps={{
-                    variant: 'body1',
-                    fontWeight: 'medium',
+          <Box
+            sx={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              p: 1.5,
+            }}
+          >
+            <IconButton onClick={handleMobileMenuClose}>
+              <CloseIcon />
+            </IconButton>
+          </Box>
+          <List sx={{ pt: 0 }}>
+            {navigationLinks.map((link, index) => (
+              <React.Fragment key={link.path}>
+                <ListItem
+                  onClick={() => {
+                    handleMenuItemClick(link.path);
+                    handleMobileMenuClose();
                   }}
-                />
-              </ListItem>
+                  sx={{
+                    py: 2,
+                    px: 3,
+                    '&:hover': {
+                      bgcolor: 'action.hover',
+                    },
+                  }}
+                >
+                  <ListItemText
+                    primary={link.title}
+                    primaryTypographyProps={{
+                      variant: 'body1',
+                      fontWeight: 'medium',
+                      fontSize: '1.1rem',
+                    }}
+                  />
+                </ListItem>
+                {index < navigationLinks.length - 1 && <Divider />}
+              </React.Fragment>
             ))}
           </List>
         </Drawer>
