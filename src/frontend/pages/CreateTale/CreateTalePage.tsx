@@ -321,7 +321,7 @@ const CreateTalePage: React.FC = () => {
         onToggleMetadata={toggleMetadata}
         onSave={handleSave}
       />
-
+      
       {/* Editor */}
       <Box sx={editorContentStyles}>
         {/* Cover Image */}
