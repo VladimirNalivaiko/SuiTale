@@ -22,7 +22,7 @@ export const editorContentStyles: SxProps<Theme> = {
 export const titleInputStyles: SxProps<Theme> = { 
   mb: 2,
   input: { 
-    color: 'white',
+    color: 'white !important',
     fontSize: '3rem',
     fontWeight: 'bold',
     '&::placeholder': {
@@ -34,7 +34,7 @@ export const titleInputStyles: SxProps<Theme> = {
     borderBottomColor: 'transparent'
   },
   '& .MuiInput-underline:hover:not(.Mui-disabled):before': {
-    borderBottomColor: 'transparent'
+    //borderBottomColor: 'transparent'
   },
 };
 
@@ -80,7 +80,6 @@ export const tipTapEditorStyles: SxProps<Theme> = {
       fontSize: '2.5rem',
       fontWeight: 'bold',
       margin: '1em 0 0.5em',
-      color: '#9c4dff'
     },
     '& h2': {
       fontSize: '2rem',

@@ -42,7 +42,7 @@ const MetadataPanel: React.FC<MetadataPanelProps> = ({
         mb: 3,
       }}
     >
-      <Typography variant="h6" gutterBottom>
+      <Typography variant="h6" sx={{color: 'rgba(255,255,255,0.7)'}} gutterBottom>
         Article Metadata
       </Typography>
       
@@ -137,7 +137,7 @@ const MetadataPanel: React.FC<MetadataPanelProps> = ({
       />
       
       <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" sx={{color: 'rgba(255,255,255,0.7)'}} color="text.secondary">
           Adding tags and a description helps readers find your content
         </Typography>
         

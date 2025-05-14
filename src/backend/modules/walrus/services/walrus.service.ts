@@ -16,10 +16,10 @@ export class WalrusService {
 
     constructor(private configService: ConfigService) {
         // Initialize Sui client
-        const rpcUrl = this.configService.get<string>(
-            'SUI_RPC_URL',
-            'https://fullnode.testnet.sui.io:443',
-        );
+        // const rpcUrl = this.configService.get<string>(
+        //     'SUI_RPC_URL',
+        //     'https://fullnode.testnet.sui.io:443',
+        // );
 
         this.suiClient = new SuiClient({
             url: getFullnodeUrl('testnet'),
@@ -114,7 +114,7 @@ export class WalrusService {
                 blob: contentBytes,
                 deletable: false,
                 epochs: 3,
-                
+
             });
 
             console.log('Blob ID:', blobId);
