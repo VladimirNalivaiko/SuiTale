@@ -27,8 +27,8 @@ import {
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
 import { useCreateTale, useUploadCoverImage } from '../../hooks/useTales';
-import { CreateTalePayload } from '../../api/tales.api';
 import { useSnackbar } from 'notistack';
+import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -53,6 +53,7 @@ const SUGGESTED_TAGS = [
 const READING_SPEED = 200;
 
 const CreateTalePage: React.FC = () => {
+  const currentAccount = useCurrentAccount();
   const [title, setTitle] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [coverImage, setCoverImage] = useState<string>('');
@@ -74,6 +75,7 @@ const CreateTalePage: React.FC = () => {
   const { mutateAsync: createTale } = useCreateTale();
   const { mutateAsync: uploadCover } = useUploadCoverImage();
   const { enqueueSnackbar } = useSnackbar();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -227,77 +229,84 @@ const CreateTalePage: React.FC = () => {
   // Handle save/publish
   const handleSave = async () => {
     setIsSaving(true);
-    // Get the raw HTML content from the editor
+    
+    if (!currentAccount) {
+      enqueueSnackbar('Please connect your wallet to publish.', { variant: 'warning' });
+      setIsSaving(false);
+      return;
+    }
+
     const rawHtml = editor?.getHTML() || '';
 
-    // --- Start of more robust HTML cleaning ---
-
-    // 1. Remove HTML comments
+    // --- Start of HTML cleaning ---
     let cleanedHtml = rawHtml.replace(/<!--.*?-->/gs, '');
-
-    // 2. Iteratively remove empty block-level tags
-    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li']; // Add more tags if needed
+    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li'];
     let previousHtml;
     do {
         previousHtml = cleanedHtml;
         tagsToClean.forEach(tag => {
-            // Matches <tag> potentially followed by whitespace </tag>
             const regex = new RegExp(`<${tag}[^>]*>\\s*<\\/${tag}>`, 'gi');
             cleanedHtml = cleanedHtml.replace(regex, '');
         });
-        // Trim leading/trailing whitespace after each pass to help catch nested structures
         cleanedHtml = cleanedHtml.trim();
-    } while (previousHtml !== cleanedHtml && cleanedHtml.length > 0); // Repeat until no more changes or string becomes empty
-
+    } while (previousHtml !== cleanedHtml && cleanedHtml.length > 0);
     // --- End of HTML cleaning ---
 
-    // Check if the content is empty after cleaning
     if (!cleanedHtml) {
-        enqueueSnackbar('Content cannot be empty after cleaning.', { variant: 'warning' });
+        enqueueSnackbar('Content cannot be empty. Please write something to publish.', { variant: 'warning' });
         setIsSaving(false);
         return;
     }
 
     try {
-      // Create tale data object using the cleaned HTML
-      const taleData: CreateTalePayload = {
+      // 1. Sign a message to authorize Walrus upload via backend
+      const messageToSign = `SuiTale: User ${currentAccount.address} authorizes uploading content. Preview (first 100 chars): ${cleanedHtml.substring(0, 100)}`;
+      const messageBytes = new TextEncoder().encode(messageToSign);
+
+      const signedMessageResult = await signPersonalMessage({
+        message: messageBytes,
+      });
+
+      // 2. Prepare data for the backend
+      // This payload will be sent to a new backend endpoint that handles Walrus upload and then calls the Sui contract.
+      const taleDataForBackend = {
         title,
         description,
-        content: cleanedHtml, // Use the thoroughly cleaned content
+        content: cleanedHtml, 
         coverImage,
         tags,
-        // Note: wordCount and readingTime might be inaccurate after cleaning.
-        // Consider recalculating based on cleanedHtml if precision is critical.
         wordCount,
-        readingTime
+        readingTime,
+        // Data for backend verification and Walrus interaction
+        userAddress: currentAccount.address,
+        signature: signedMessageResult.signature, // User's signature for the message
+        // The original message (as bytes or string) needs to be sent so the backend can verify the signature against it.
+        // Sending the original string `messageToSign` is often easier for the backend to reconstruct.
+        originalMessage: messageToSign, 
       };
 
-      // Send to backend API using React Query
-      const savedTale = await createTale(taleData);
+      // TODO: Implement backend endpoint (e.g., /api/publish-tale-step1 or /api/tales/initiate-walrus-upload)
+      // This endpoint will:
+      //    a. Verify the signature (userAddress, originalMessage, signature).
+      //    b. If verified, upload `content` to Walrus using the backend's Walrus client and key.
+      //    c. Get the `blobId` from Walrus.
+      //    d. Then, (either in the same endpoint or a subsequent call) call the Sui contract's `publish` function 
+      //       with the `blobId` and `title`, signed by the backend's key (as it was before).
+      //    e. Return the final transaction digest or success status to the frontend.
+      
+      // For now, we just log the data and show a temporary message.
+      // The actual call to `createTale` (or a new function) is commented out until the backend is ready.
+      console.log('Data prepared for backend (Walrus auth + content):', taleDataForBackend);
+      // const finalResult = await createTale(taleDataForBackend); // This will need to be adjusted or replaced
+      enqueueSnackbar('Content ready for backend processing (Walrus & Sui publish pending).', { variant: 'info' });
 
-      console.log('Tale saved successfully:', savedTale);
-
-      // Clear local storage after successful save (optional)
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER); // Also consider clearing cover, description, tags
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
-
-
-      // Set last saved time
+      // console.log('Tale publishing process initiated:', finalResult);
       setLastSaved(new Date());
 
-      // Show success message
-      enqueueSnackbar('Tale saved successfully!', { variant: 'success' });
-
-      // Optionally redirect to the tale view page
-      // history.push(`/tales/${savedTale.id}`);
     } catch (error) {
-      console.error('Error saving tale:', error);
-      // Provide more specific error feedback if possible
+      console.error('Error during message signing or data preparation:', error);
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      enqueueSnackbar(`Failed to save tale: ${errorMessage}`, { variant: 'error' });
+      enqueueSnackbar(`Operation failed: ${errorMessage}`, { variant: 'error' });
     } finally {
       setIsSaving(false);
     }
