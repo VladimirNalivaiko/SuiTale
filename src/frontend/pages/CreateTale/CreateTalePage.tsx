@@ -26,10 +26,11 @@ import {
   bottomToolbarStyles,
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
-import { useCreateTale, useUploadCoverImage, useInitiatePublication } from '../../hooks/useTales';
+import { useCreateTale, useInitiatePublication } from '../../hooks/useTales';
+import { useUploadCoverToWalrus } from '../../hooks/useFiles';
 import { useSnackbar } from 'notistack';
 import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
-import { FrontendInitiatePublicationDto } from '../../api/tales.api';
+import { FrontendInitiatePublicationDto, UploadCoverResponse } from '../../api/tales.api';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -57,24 +58,25 @@ const CreateTalePage: React.FC = () => {
   const currentAccount = useCurrentAccount();
   const [title, setTitle] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [coverImage, setCoverImage] = useState<string>('');
+  
+  // New state for cover image file and its preview URL
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string>(''); // Used for <CoverImageUpload preview
+  
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
   const [previewOpen, setPreviewOpen] = useState<boolean>(false);
-  const [isUploadingCover, setIsUploadingCover] = useState<boolean>(false);
   
-  // States for metadata
   const [description, setDescription] = useState<string>('');
   const [tags, setTags] = useState<string[]>([]);
   const [metadataOpen, setMetadataOpen] = useState<boolean>(false);
   
-  // Reading statistics
   const [wordCount, setWordCount] = useState<number>(0);
   const [readingTime, setReadingTime] = useState<number>(0);
 
   // React Query hooks
   const { mutateAsync: createTale } = useCreateTale();
-  const { mutateAsync: uploadCover, isPending: isUploadingCoverMutation } = useUploadCoverImage();
+  const { mutateAsync: uploadCoverToWalrus, isPending: isUploadingCoverToWalrus } = useUploadCoverToWalrus();
   const { enqueueSnackbar } = useSnackbar();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
   const { mutateAsync: initiatePublication, isPending: isPublishing } = useInitiatePublication();
@@ -143,22 +145,20 @@ const CreateTalePage: React.FC = () => {
   useEffect(() => {
     const savedTitle = localStorage.getItem(LOCAL_STORAGE_KEYS.TITLE);
     const savedContent = localStorage.getItem(LOCAL_STORAGE_KEYS.CONTENT);
-    const savedCover = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER);
+    // const savedCoverUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER); // We don't store the file, maybe a URL if uploaded previously?
+                                                                       // For simplicity, let's not reload cover from localStorage for now, user re-selects.
     const tipShown = localStorage.getItem(LOCAL_STORAGE_KEYS.SLASH_TIP_SHOWN);
     const savedDescription = localStorage.getItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
     const savedTags = localStorage.getItem(LOCAL_STORAGE_KEYS.TAGS);
     
     if (savedTitle) setTitle(savedTitle);
     if (savedContent && editor) editor.commands.setContent(savedContent);
-    if (savedCover) setCoverImage(savedCover);
+    // if (savedCoverUrl) setCoverPreviewUrl(savedCoverUrl); // If you want to restore a previously uploaded Walrus URL
     if (tipShown === 'true') setShowSlashTip(false);
     if (savedDescription) setDescription(savedDescription);
     if (savedTags) setTags(JSON.parse(savedTags));
     
-    // Calculate initial reading stats
-    if (editor) {
-      calculateReadingStats();
-    }
+    if (editor) calculateReadingStats();
   }, [editor, calculateReadingStats]);
 
   // Auto-save title
@@ -185,27 +185,26 @@ const CreateTalePage: React.FC = () => {
     }
   }, [tags]);
 
-  // Handle cover image upload
+  // Updated Handle cover image selection
   const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    console.log('[CreateTalePage] handleCoverUpload (file selection) triggered!');
     const file = event.target.files?.[0];
     if (file) {
-      setIsUploadingCover(true);
-      try {
-        const uploadResponse = await uploadCover(file);
-        const serverCoverImageUrl = uploadResponse.coverImage;
+      console.log('[CreateTalePage] File selected for cover:', file.name);
+      setCoverImageFile(file); // Store the file object
 
-        setCoverImage(serverCoverImageUrl);
-        localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, serverCoverImageUrl);
-        setLastSaved(new Date());
-        enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
-
-      } catch (error) {
-        console.error('Error uploading cover image:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
-        enqueueSnackbar(`Failed to upload cover image: ${errorMessage}`, { variant: 'error' });
-      } finally {
-        setIsUploadingCover(false);
-      }
+      // Create a preview URL for the selected file
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setCoverPreviewUrl(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      // No localStorage saving here, file is kept in state until publish
+      setLastSaved(new Date()); // Indicate change
+      enqueueSnackbar('Cover image selected. It will be uploaded on publication.', { variant: 'info' });
+    } else {
+      setCoverImageFile(null);
+      setCoverPreviewUrl('');
     }
   };
 
@@ -224,10 +223,18 @@ const CreateTalePage: React.FC = () => {
     setTags(newTags);
   };
 
-  // Handle save/publish
+  // BIG UPDATE: Handle save/publish with new cover upload flow
   const handleSave = async () => {
     if (!currentAccount || !currentAccount.publicKey) {
       enqueueSnackbar('Wallet not connected or missing public key.', { variant: 'warning' });
+      return;
+    }
+    if (!title.trim()) {
+      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
+      return;
+    }
+    if (!description.trim()) {
+      enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
       return;
     }
 
@@ -244,134 +251,124 @@ const CreateTalePage: React.FC = () => {
         cleanedHtml = cleanedHtml.trim();
     } while (cleanedHtml !== previousHtml && cleanedHtml.length > 0);
 
-
     if (!cleanedHtml || cleanedHtml === '<p></p>') {
       enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
       return;
     }
 
-    if (!title.trim()) {
-      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
-      return;
-    }
-    
-    if (!description.trim()) {
-        enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
-        return;
-    }
+    setIsSaving(true); // Combined loading state for the entire process
+    let finalCoverImageUrl: string | undefined = undefined;
 
     try {
-      const messageToSign = `SuiTale content upload authorization for user ${currentAccount.address}. Title: ${title}`;
+      // Step 1: Upload cover image to Walrus if a new one is selected
+      
+
+      // Step 2: Sign message
+      const userAddress = currentAccount.address;
+      const messageToSign = String.raw `SuiTale content upload authorization for user ${userAddress}. Title: ${title}`;
       const messageBytes = new TextEncoder().encode(messageToSign);
-
-      const signedMessageResult = await signPersonalMessage({
-        message: messageBytes,
-      });
-      const bytesFromWallet = signedMessageResult.bytes; // Type string | Uint8Array
-
-      // ---- START: Added logs for signedMessageResult.bytes ----
-      console.log('Frontend: signedMessageResult (full object from signPersonalMessage):', signedMessageResult);
-      console.log('Frontend: bytesFromWallet (type):', typeof bytesFromWallet, bytesFromWallet);
-
-      let rawBytesToEncode: Uint8Array | undefined;
-      let signedMessageBytesForBackendB64: string = ''; // Initialize to empty string
-
-      if (bytesFromWallet && typeof bytesFromWallet !== 'string') { // Primary check: exists and not a string
-          // We expect this to be Uint8Array or something Buffer.from can handle as such
-          // This path is taken if bytesFromWallet is an object, likely Uint8Array
-          rawBytesToEncode = bytesFromWallet as Uint8Array; // Proceed with assumption
-          console.log('Frontend: bytesFromWallet is treated as Uint8Array-like.');
-          try {
-              const bufferForHex = Buffer.from(rawBytesToEncode);
-              console.log('Frontend: bytesFromWallet HEX:', bufferForHex.toString('hex'));
-              console.log('Frontend: bytesFromWallet Length:', bufferForHex.length);
-              signedMessageBytesForBackendB64 = bufferForHex.toString('base64'); // Encode here once confirmed valid
-          } catch (e) {
-              console.error('Frontend: Error processing non-string bytesFromWallet for logging/encoding:', e);
-              // signedMessageBytesForBackendB64 remains empty or previous value if error
-          }
+      const signedMessageResult = await signPersonalMessage({ message: messageBytes });
+      const bytesFromWallet = signedMessageResult.bytes;
+      let signedMessageBytesForBackendB64: string = '';
+      if (bytesFromWallet && typeof bytesFromWallet !== 'string') {
+          const rawBytesToEncode = bytesFromWallet as Uint8Array;
+          signedMessageBytesForBackendB64 = Buffer.from(rawBytesToEncode).toString('base64');
       } else if (typeof bytesFromWallet === 'string') {
-          console.warn('Frontend: bytesFromWallet is a STRING. This is usually unexpected for .bytes from signPersonalMessage.');
-          // If it's a string, it might be already base64 encoded, or it might be a plain string (needs encoding).
-          // For now, let's assume if it's a string, it IS the base64 encoded version of what was signed.
-          // This aligns with `signedMessageResult.signature` which is also a base64 string.
-          // However, the DTO expects base64 of the *raw message bytes* that were signed (with Sui prefix).
-          // If dapp-kit for some reason returns a string here for .bytes, clarification on its format is needed.
-          // Let's log its hex if we treat it as base64. The backend expects base64 of the *actual signed bytes*.
-          signedMessageBytesForBackendB64 = bytesFromWallet; // Tentatively assign, assuming it IS the correct base64 string.
-                                                         // If not, backend will fail verification.
-          try {
-            const decodedForLog = Buffer.from(bytesFromWallet, 'base64');
-            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded HEX for log:', decodedForLog.toString('hex'));
-            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded Length for log:', decodedForLog.length);
-          } catch (decodeError) {
-            console.error('Frontend: Failed to decode bytesFromWallet assuming it was a base64 string (for logging). It might be a plain string or invalid base64.:', decodeError);
-            // If it was a plain string, it should have been new TextEncoder().encode(bytesFromWallet) then to base64.
-            // But signPersonalMessage.bytes is expected to be the raw signed bytes (prefixed by wallet).
-            // Resetting to empty if it wasn't valid base64, as the assumption failed.
-            // signedMessageBytesForBackendB64 = ''; // Or handle as plain text that needs encoding? Needs clarity on string format from dapp-kit.
-          }
-      } else {
-          console.warn('Frontend: bytesFromWallet is undefined/null or an unexpected type. Actual value:', bytesFromWallet);
-          // signedMessageBytesForBackendB64 remains empty
-      }
-      // ---- END: Added logs for signedMessageResult.bytes ----
-
-      const publicKeyBytes = currentAccount.publicKey;
-      const signatureScheme = (signedMessageResult as any).signatureScheme || (currentAccount as any).signatureScheme || 'unknown';
-      if (signatureScheme === 'unknown') {
-        console.warn('CreateTalePage.tsx: Signature scheme could not be determined. Backend verification might be affected.');
-      }
+          signedMessageBytesForBackendB64 = bytesFromWallet;
+      } 
 
       if (!signedMessageBytesForBackendB64) {
         console.error('Frontend: signedMessageBytesForBackendB64 is empty. Aborting submission.');
         enqueueSnackbar('Failed to prepare signed message for backend. Please try again.', { variant: 'error' });
-        return; // or setIsSaving(false) if not relying on react-query for this specific error path
+        setIsSaving(false);
+        return;
+      }
+      const publicKeyBytes = currentAccount.publicKey;
+      
+      let signatureScheme = 'unknown';
+      if (currentAccount && currentAccount.chains && currentAccount.chains.length > 0) {
+          const chainParts = currentAccount.chains[0].split(':');
+          if (chainParts.length > 1) {
+              signatureScheme = chainParts[1]; // e.g., 'ed25519' or 'secp256k1'
+          }
+      }
+      // Дополнительно можно попытаться извлечь из signedMessageResult, если первый способ не сработал,
+      // но обычно информация из currentAccount.chains более стабильна для определения типа ключа аккаунта.
+      if (signatureScheme === 'unknown' && (signedMessageResult as any)?.signatureScheme) {
+         signatureScheme = (signedMessageResult as any).signatureScheme;
       }
 
+      if (signatureScheme === 'unknown') {
+        console.warn('CreateTalePage.tsx: Signature scheme could not be determined. Backend verification might be affected.');
+      }
+
+      if (coverImageFile) {
+        enqueueSnackbar('Uploading cover image to Walrus...', { variant: 'info' });
+        try {
+          const uploadResponse = await uploadCoverToWalrus(coverImageFile);
+          finalCoverImageUrl = uploadResponse.url;
+          enqueueSnackbar('Cover image uploaded to Walrus successfully!', { variant: 'success' });
+          if (finalCoverImageUrl) {
+            localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, finalCoverImageUrl); // Save the final Walrus URL
+          }
+        } catch (uploadError) {
+          console.error('Error uploading cover image to Walrus during save process:', uploadError);
+          const errorMsg = uploadError instanceof Error ? uploadError.message : 'Cover upload failed';
+          enqueueSnackbar(`Failed to upload cover to Walrus: ${errorMsg}. Publication aborted.`, { variant: 'error' });
+          setIsSaving(false);
+          return;
+        }
+      } else {
+        // If no new file, check if there's a previously uploaded Walrus URL in localStorage (optional)
+        // finalCoverImageUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER) || undefined;
+        // For simplicity now, if no new file, no cover image is sent unless you explicitly load it from LS.
+      }
+
+            // Step 3: Prepare DTO and initiate publication
       const taleDataForBackend: FrontendInitiatePublicationDto = {
-        title,
-        description,
+        title: title.trim(),
+        description: description.trim(),
         content: cleanedHtml,
-        coverImage: coverImage || undefined,
-        tags: tags || [],
+        coverImageWalrusUrl: finalCoverImageUrl, // Use the URL from Walrus upload (or undefined)
+        tags: tags.length > 0 ? tags : undefined,
         wordCount,
         readingTime,
-        userAddress: currentAccount.address,
-        signature_base64: signedMessageResult.signature, // This is already base64 string
+        userAddress,
+        signature_base64: signedMessageResult.signature,
         signedMessageBytes_base64: signedMessageBytesForBackendB64,
         publicKey_base64: Buffer.from(publicKeyBytes).toString('base64'),
-        signatureScheme: signatureScheme,
+        signatureScheme,
+        // Optional NFT params can be added here if UI exists for them
       };
 
       console.log('CreateTalePage.tsx: Submitting to initiatePublication:', taleDataForBackend);
+      
 
       const result = await initiatePublication(taleDataForBackend);
-
       console.log('Backend response (initiatePublication):', result);
       enqueueSnackbar('Tale submitted successfully! Processing publication.', { variant: 'success' });
 
-      // Clear form and local storage on success
+      // Clear form and relevant local storage on success
       localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
       localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER); // Remove cover as it's now part of published content
       localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
       localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
-      editor?.commands.setContent(''); // Clear editor content
+      editor?.commands.setContent('');
       setTitle('');
       setDescription('');
-      setCoverImage('');
+      setCoverImageFile(null); // Clear selected file
+      setCoverPreviewUrl('');   // Clear preview
       setTags([]);
       setWordCount(0);
       setReadingTime(0);
-      // Consider navigating the user or updating UI further
 
     } catch (error) {
       console.error('Error during save/publish process:', error);
-      // The error object from react-query will likely be an Error instance.
-      // If talesApi throws an error with a message, it should be here.
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during publication.';
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
       enqueueSnackbar(`Failed to publish: ${errorMessage}`, { variant: 'error' });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -387,8 +384,7 @@ const CreateTalePage: React.FC = () => {
         wordCount={wordCount}
         readingTime={readingTime}
         lastSaved={lastSaved}
-        isSaving={isPublishing}
-        isUploadingCover={isUploadingCover}
+        isSaving={isPublishing || isUploadingCoverToWalrus}
         onTogglePreview={togglePreview}
         onToggleMetadata={toggleMetadata}
         onSave={handleSave}
@@ -398,8 +394,9 @@ const CreateTalePage: React.FC = () => {
       <Box sx={editorContentStyles}>
         {/* Cover Image */}
         <CoverImageUpload 
-          coverImage={coverImage} 
-          onCoverUpload={handleCoverUpload} 
+          coverImage={coverPreviewUrl}
+          onCoverUpload={handleCoverUpload}
+          isUploading={isUploadingCoverToWalrus}
         />
 
         {/* Title input - borderless, large size */}
@@ -454,7 +451,7 @@ const CreateTalePage: React.FC = () => {
         onClose={togglePreview}
         title={title}
         content={editor.getHTML()}
-        coverImage={coverImage}
+        coverImage={coverPreviewUrl}
         description={description}
         tags={tags}
         wordCount={wordCount}

@@ -31,22 +31,36 @@ export interface CreateTalePayload {
   authorId?: string;
 }
 
+export interface UploadCoverResponse {
+  blobId: string;
+  url: string;
+}
+
 export interface UpdateTalePayload extends Partial<CreateTalePayload> {}
 
 // DTO for the new initiate-publication endpoint
 export interface FrontendInitiatePublicationDto {
   title: string;
-  description: string;
-  content: string;
-  coverImage?: string;
-  tags?: string[];
-  wordCount: number;
-  readingTime: number;
+  content: string; // Main content for Walrus
   userAddress: string;
-  signature_base64: string;
-  signedMessageBytes_base64: string;
-  publicKey_base64: string;
-  signatureScheme: string;
+  signature_base64: string; // Full signature from wallet (flag+sig+pk)
+  signedMessageBytes_base64: string; // SUI-prefixed message bytes that were signed
+  publicKey_base64: string; // User's public key (flag+pk)
+  signatureScheme: string; // e.g., 'ed25519' or 'secp256k1'
+  
+  description?: string; // Optional description for the tale/NFT
+  coverImageWalrusUrl?: string; // <<<< ADDED/UPDATED THIS
+  // coverImage?: string; // <<<< REMOVE OR COMMENT OUT OLD FIELD if it existed and was different
+
+  // Optional NFT parameters (ensure types match what backend DTO expects after parsing)
+  mintPrice?: string; 
+  mintCapacity?: string;
+  royaltyFeeBps?: number; 
+  
+  // Optional fields from editor (not for on-chain directly, but for DB)
+  tags?: string[];
+  wordCount?: number;
+  readingTime?: number;
 }
 
 // API functions
@@ -154,11 +168,11 @@ export const talesApi = {
   },
 
   // Upload a cover image
-  async uploadCoverImage(file: File): Promise<{ coverImage: string }> {
+  async uploadCoverImage(file: File): Promise<UploadCoverResponse> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('coverImage', file);
     
-    const response = await fetch(`${API_BASE_URL}/tales/upload/cover`, {
+    const response = await fetch(`${API_BASE_URL}/files/upload-cover-to-walrus`, {
       method: 'POST',
       body: formData,
     });

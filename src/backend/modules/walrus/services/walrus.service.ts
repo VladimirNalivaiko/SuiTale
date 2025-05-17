@@ -154,4 +154,43 @@ export class WalrusService {
             throw new Error('Failed to fetch content from Walrus');
         }
     }
+
+    /**
+     * Uploads a file buffer to Walrus.
+     * @param fileBuffer The buffer of the file to upload.
+     * @param deletable Whether the blob should be deletable.
+     * @param epochs Number of epochs to store the blob for.
+     * @returns An object containing the blobId and the direct URL to the blob.
+     */
+    public async uploadFileToWalrus(
+        fileBuffer: Uint8Array, 
+        deletable = false, 
+        epochs = 3
+    ): Promise<{ blobId: string; url: string }> {
+        try {
+            this.logger.log(`Walrus file upload started. Buffer length: ${fileBuffer.length}`);
+            if (!this.keyPair) {
+                this.logger.warn('Walrus keyPair not initialized yet, attempting to initialize...');
+                this.keyPair = await this.getKeypair();
+                this.logger.log('Walrus keyPair initialized.');
+            }
+
+            const { blobId } = await this.walrusClient.writeBlob({
+                signer: this.keyPair,
+                blob: fileBuffer,
+                deletable: deletable,
+                epochs: epochs,
+            });
+
+            const blobUrl = `https://cache.testnet.walrus.xyz/blob/${blobId}`;
+            this.logger.log(`File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`);
+            return { blobId, url: blobUrl };
+
+        } catch (error) {
+            let message = 'Unknown Error';
+            if (error instanceof Error) message = error.message;
+            this.logger.error('Walrus file upload failed:', message, error);
+            throw error;
+        }
+    }
 }

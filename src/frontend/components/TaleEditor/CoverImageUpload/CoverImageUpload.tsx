@@ -5,11 +5,13 @@ import AddPhotoAlternateIcon from '@mui/icons-material/AddPhotoAlternate';
 interface CoverImageUploadProps {
   coverImage: string;
   onCoverUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isUploading?: boolean;
 }
 
 const CoverImageUpload: React.FC<CoverImageUploadProps> = ({ 
   coverImage, 
-  onCoverUpload 
+  onCoverUpload,
+  isUploading
 }) => {
   return (
     <Box sx={{ mb: 4, position: 'relative' }}>

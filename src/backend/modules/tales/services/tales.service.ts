@@ -203,13 +203,37 @@ export class TalesService {
         console.log('[TalesService] Signature verified successfully for user:', dto.userAddress);
 
         const blobId = await this.walrusService.uploadTale(dto.content);
-        const suiTxDigest = await this.suiService.publishTale(blobId, dto.title);
+        
+        // Prepare arguments for publishTaleTemplate
+        const taleDescription = dto.description || 'An amazing SuiTale story!'; // Use DTO description or default
+        // Use coverImageWalrusUrl from DTO if provided, otherwise empty string or a default placeholder Walrus URL
+        const taleCoverImageUrl = dto.coverImageWalrusUrl || ''; 
+        console.log(`[TalesService] Using Cover Image URL: ${taleCoverImageUrl}`);
+
+        // NFT Parameters - use from DTO if provided, otherwise use current placeholders
+        const taleMintPrice = dto.mintPrice || '100000000'; 
+        const taleMintCapacity = dto.mintCapacity || '100'; 
+        const taleAuthorMintBeneficiary = dto.userAddress; // This is always the user from DTO
+        const taleRoyaltyFeeBps = dto.royaltyFeeBps !== undefined ? dto.royaltyFeeBps : 500; 
+
+        console.log(`[TalesService] Publishing to Sui with params: blobId: ${blobId}, title: ${dto.title}, desc_len: ${taleDescription.length}, coverUrl: ${taleCoverImageUrl}, price: ${taleMintPrice}, capacity: ${taleMintCapacity}, royalty: ${taleRoyaltyFeeBps}`);
+
+        const suiTxDigest = await this.suiService.publishTaleTemplate(
+            blobId,
+            dto.title,
+            taleDescription,
+            taleCoverImageUrl,
+            taleMintPrice,
+            taleMintCapacity,
+            taleAuthorMintBeneficiary,
+            taleRoyaltyFeeBps,
+        );
 
         const newTaleData = {
             title: dto.title,
-            description: dto.description,
+            description: taleDescription, // Save the used description
             blobId: blobId,
-            coverImage: dto.coverImage,
+            coverImage: taleCoverImageUrl, // Save the Walrus URL as coverImage in DB
             tags: dto.tags || [],
             wordCount: dto.wordCount,
             readingTime: dto.readingTime,

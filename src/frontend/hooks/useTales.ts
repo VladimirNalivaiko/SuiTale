@@ -136,12 +136,3 @@ export const useDeleteTale = () => {
     },
   });
 };
-
-/**
- * Upload a cover image
- */
-export const useUploadCoverImage = () => {
-  return useMutation<{ coverImage: string }, Error, File>({
-    mutationFn: (file: File) => talesApi.uploadCoverImage(file),
-  });
-}; 

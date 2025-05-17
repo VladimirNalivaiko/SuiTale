@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { TalesModule } from './modules/tales/tales.module';
 import { WalrusModule } from './modules/walrus/walrus.module';
+import { FilesModule } from './modules/files/files.module';
 // Assuming SuiModule is correctly located, if not, the path might need adjustment
 // import { SuiModule } from './modules/sui/sui.module'; 
 // If SuiModule is in src/backend/modules/sui/sui.module.ts then the above is correct.
@@ -22,6 +23,7 @@ import { WalrusModule } from './modules/walrus/walrus.module';
     // Feature modules
     TalesModule,
     WalrusModule,
+    FilesModule,
     // SuiModule, // Uncomment if SuiModule is used and path is correct
   ],
 })

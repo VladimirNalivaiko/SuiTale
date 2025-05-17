@@ -6,6 +6,9 @@ import {
     IsArray,
     IsNumber,
     Min,
+    IsBase64,
+    Matches,
+    MaxLength,
 } from 'class-validator';
 
 export class InitiatePublicationDto {
@@ -15,6 +18,7 @@ export class InitiatePublicationDto {
     })
     @IsString()
     @IsNotEmpty()
+    @MaxLength(200) // Max title length for on-chain storage
     title: string;
 
     @ApiProperty({
@@ -23,20 +27,23 @@ export class InitiatePublicationDto {
     })
     @IsString()
     @IsNotEmpty()
-    description: string;
+    @MaxLength(10000) // Max description length for on-chain if stored directly, or for metadata
+    description?: string; // Optional description for the tale/NFT
 
     @ApiProperty({ description: 'HTML content of the tale' })
     @IsString()
     @IsNotEmpty()
-    content: string;
+    content: string; // Main content for Walrus
 
     @ApiProperty({
         description: 'Base64 encoded cover image or URL',
         required: false,
     })
-    @IsString()
     @IsOptional()
-    coverImage?: string;
+    @IsString()
+    // Basic URL validation, can be made more strict
+    // @Matches(/^(ftp|http|https|ipfs|ipns):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?$/)
+    coverImageWalrusUrl?: string; 
 
     @ApiProperty({
         description: 'Array of tags associated with the tale',
@@ -52,21 +59,20 @@ export class InitiatePublicationDto {
         description: 'Word count of the tale content',
         example: 1500,
     })
-    @IsNumber()
-    @Min(1)
-    wordCount: number;
+    @IsOptional()
+    wordCount?: number;
 
     @ApiProperty({
         description: 'Estimated reading time in minutes',
         example: 5,
     })
-    @IsNumber()
-    @Min(1)
-    readingTime: number;
+    @IsOptional()
+    readingTime?: number;
 
     @ApiProperty({ description: "User's Sui wallet address who is publishing" })
     @IsString()
     @IsNotEmpty()
+    @Matches(/^0x[a-fA-F0-9]{64}$/) // Sui address format
     userAddress: string;
 
     @ApiProperty({
@@ -74,21 +80,24 @@ export class InitiatePublicationDto {
     })
     @IsString()
     @IsNotEmpty()
-    signature_base64: string;
+    @IsBase64()
+    signature_base64: string; // Full signature from wallet (flag+sig+pk)
 
     @ApiProperty({
         description: 'Base64 encoded bytes of the message that was actually signed by the user (includes Sui prefix)',
     })
     @IsString()
     @IsNotEmpty()
-    signedMessageBytes_base64: string;
+    @IsBase64()
+    signedMessageBytes_base64: string; // SUI-prefixed message bytes that were signed
 
     @ApiProperty({
         description: "Base64 encoded user's public key",
     })
     @IsString()
     @IsNotEmpty()
-    publicKey_base64: string;
+    @IsBase64()
+    publicKey_base64: string; // User's public key (flag+pk)
 
     @ApiProperty({
         description: 'Signature scheme used by the wallet (e.g., ed25519, secp256k1)',
@@ -96,5 +105,20 @@ export class InitiatePublicationDto {
     })
     @IsString()
     @IsNotEmpty()
-    signatureScheme: string;
+    signatureScheme: string; // e.g., 'ed25519' or 'secp256k1'
+
+    // Fields for NFT parameters - to be sent from frontend if configurable
+    @IsOptional()
+    @IsString() // Should be a string representing u64
+    mintPrice?: string; 
+
+    @IsOptional()
+    @IsString() // Should be a string representing u64
+    mintCapacity?: string;
+
+    @IsOptional()
+    // @IsNumber() // Type in contract is u16
+    // @Min(0)
+    // @Max(10000) // Max 100% in basis points
+    royaltyFeeBps?: number; // In basis points, e.g., 500 for 5%
 }
