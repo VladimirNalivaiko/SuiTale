@@ -10,7 +10,8 @@ import {
   Tale, 
   TaleWithContent, 
   CreateTalePayload, 
-  UpdateTalePayload 
+  UpdateTalePayload,
+  FrontendInitiatePublicationDto
 } from '../api/tales.api';
 
 // Query keys
@@ -79,6 +80,26 @@ export const useCreateTale = () => {
       // Invalidate the tales list query to refetch
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
     },
+  });
+};
+
+/**
+ * Initiate Publication for a new tale
+ */
+export const useInitiatePublication = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation<Tale, Error, FrontendInitiatePublicationDto>({
+    mutationFn: (payload: FrontendInitiatePublicationDto) => talesApi.initiatePublication(payload),
+    onSuccess: (createdTale) => {
+      // Invalidate the tales list query to refetch
+      queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
+      // Optionally, pre-fill the cache for the new tale's detail
+      // queryClient.setQueryData(taleKeys.detail(createdTale.id), createdTale);
+    },
+    // onError: (error) => { // Optional: specific error handling for this mutation
+    //   console.error("Error initiating publication:", error);
+    // }
   });
 };
 

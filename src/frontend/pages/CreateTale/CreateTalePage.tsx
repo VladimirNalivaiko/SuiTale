@@ -26,9 +26,10 @@ import {
   bottomToolbarStyles,
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
-import { useCreateTale, useUploadCoverImage } from '../../hooks/useTales';
+import { useCreateTale, useUploadCoverImage, useInitiatePublication } from '../../hooks/useTales';
 import { useSnackbar } from 'notistack';
 import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
+import { FrontendInitiatePublicationDto } from '../../api/tales.api';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -73,9 +74,10 @@ const CreateTalePage: React.FC = () => {
 
   // React Query hooks
   const { mutateAsync: createTale } = useCreateTale();
-  const { mutateAsync: uploadCover } = useUploadCoverImage();
+  const { mutateAsync: uploadCover, isPending: isUploadingCoverMutation } = useUploadCoverImage();
   const { enqueueSnackbar } = useSnackbar();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const { mutateAsync: initiatePublication, isPending: isPublishing } = useInitiatePublication();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -189,11 +191,10 @@ const CreateTalePage: React.FC = () => {
     if (file) {
       setIsUploadingCover(true);
       try {
-        // Upload to the server using the useUploadCoverImage hook's mutation
-        const uploadResponse = await uploadCover(file); 
-        const serverCoverImageUrl = uploadResponse.coverImage; // This is the base64 data URL from the server
+        const uploadResponse = await uploadCover(file);
+        const serverCoverImageUrl = uploadResponse.coverImage;
 
-        setCoverImage(serverCoverImageUrl); // Update state with server-provided URL
+        setCoverImage(serverCoverImageUrl);
         localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, serverCoverImageUrl);
         setLastSaved(new Date());
         enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
@@ -202,9 +203,6 @@ const CreateTalePage: React.FC = () => {
         console.error('Error uploading cover image:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
         enqueueSnackbar(`Failed to upload cover image: ${errorMessage}`, { variant: 'error' });
-        // Optionally, clear the cover image if upload fails or revert to a placeholder/previous one
-        // setCoverImage(''); 
-        // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
       } finally {
         setIsUploadingCover(false);
       }
@@ -228,17 +226,12 @@ const CreateTalePage: React.FC = () => {
 
   // Handle save/publish
   const handleSave = async () => {
-    setIsSaving(true);
-    
-    if (!currentAccount) {
-      enqueueSnackbar('Please connect your wallet to publish.', { variant: 'warning' });
-      setIsSaving(false);
+    if (!currentAccount || !currentAccount.publicKey) {
+      enqueueSnackbar('Wallet not connected or missing public key.', { variant: 'warning' });
       return;
     }
 
     const rawHtml = editor?.getHTML() || '';
-
-    // --- Start of HTML cleaning ---
     let cleanedHtml = rawHtml.replace(/<!--.*?-->/gs, '');
     const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li'];
     let previousHtml;
@@ -249,66 +242,136 @@ const CreateTalePage: React.FC = () => {
             cleanedHtml = cleanedHtml.replace(regex, '');
         });
         cleanedHtml = cleanedHtml.trim();
-    } while (previousHtml !== cleanedHtml && cleanedHtml.length > 0);
-    // --- End of HTML cleaning ---
+    } while (cleanedHtml !== previousHtml && cleanedHtml.length > 0);
 
-    if (!cleanedHtml) {
-        enqueueSnackbar('Content cannot be empty. Please write something to publish.', { variant: 'warning' });
-        setIsSaving(false);
+
+    if (!cleanedHtml || cleanedHtml === '<p></p>') {
+      enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
+      return;
+    }
+
+    if (!title.trim()) {
+      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
+      return;
+    }
+    
+    if (!description.trim()) {
+        enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
         return;
     }
 
     try {
-      // 1. Sign a message to authorize Walrus upload via backend
-      const messageToSign = `SuiTale: User ${currentAccount.address} authorizes uploading content. Preview (first 100 chars): ${cleanedHtml.substring(0, 100)}`;
+      const messageToSign = `SuiTale content upload authorization for user ${currentAccount.address}. Title: ${title}`;
       const messageBytes = new TextEncoder().encode(messageToSign);
 
       const signedMessageResult = await signPersonalMessage({
         message: messageBytes,
       });
+      const bytesFromWallet = signedMessageResult.bytes; // Type string | Uint8Array
 
-      // 2. Prepare data for the backend
-      // This payload will be sent to a new backend endpoint that handles Walrus upload and then calls the Sui contract.
-      const taleDataForBackend = {
+      // ---- START: Added logs for signedMessageResult.bytes ----
+      console.log('Frontend: signedMessageResult (full object from signPersonalMessage):', signedMessageResult);
+      console.log('Frontend: bytesFromWallet (type):', typeof bytesFromWallet, bytesFromWallet);
+
+      let rawBytesToEncode: Uint8Array | undefined;
+      let signedMessageBytesForBackendB64: string = ''; // Initialize to empty string
+
+      if (bytesFromWallet && typeof bytesFromWallet !== 'string') { // Primary check: exists and not a string
+          // We expect this to be Uint8Array or something Buffer.from can handle as such
+          // This path is taken if bytesFromWallet is an object, likely Uint8Array
+          rawBytesToEncode = bytesFromWallet as Uint8Array; // Proceed with assumption
+          console.log('Frontend: bytesFromWallet is treated as Uint8Array-like.');
+          try {
+              const bufferForHex = Buffer.from(rawBytesToEncode);
+              console.log('Frontend: bytesFromWallet HEX:', bufferForHex.toString('hex'));
+              console.log('Frontend: bytesFromWallet Length:', bufferForHex.length);
+              signedMessageBytesForBackendB64 = bufferForHex.toString('base64'); // Encode here once confirmed valid
+          } catch (e) {
+              console.error('Frontend: Error processing non-string bytesFromWallet for logging/encoding:', e);
+              // signedMessageBytesForBackendB64 remains empty or previous value if error
+          }
+      } else if (typeof bytesFromWallet === 'string') {
+          console.warn('Frontend: bytesFromWallet is a STRING. This is usually unexpected for .bytes from signPersonalMessage.');
+          // If it's a string, it might be already base64 encoded, or it might be a plain string (needs encoding).
+          // For now, let's assume if it's a string, it IS the base64 encoded version of what was signed.
+          // This aligns with `signedMessageResult.signature` which is also a base64 string.
+          // However, the DTO expects base64 of the *raw message bytes* that were signed (with Sui prefix).
+          // If dapp-kit for some reason returns a string here for .bytes, clarification on its format is needed.
+          // Let's log its hex if we treat it as base64. The backend expects base64 of the *actual signed bytes*.
+          signedMessageBytesForBackendB64 = bytesFromWallet; // Tentatively assign, assuming it IS the correct base64 string.
+                                                         // If not, backend will fail verification.
+          try {
+            const decodedForLog = Buffer.from(bytesFromWallet, 'base64');
+            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded HEX for log:', decodedForLog.toString('hex'));
+            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded Length for log:', decodedForLog.length);
+          } catch (decodeError) {
+            console.error('Frontend: Failed to decode bytesFromWallet assuming it was a base64 string (for logging). It might be a plain string or invalid base64.:', decodeError);
+            // If it was a plain string, it should have been new TextEncoder().encode(bytesFromWallet) then to base64.
+            // But signPersonalMessage.bytes is expected to be the raw signed bytes (prefixed by wallet).
+            // Resetting to empty if it wasn't valid base64, as the assumption failed.
+            // signedMessageBytesForBackendB64 = ''; // Or handle as plain text that needs encoding? Needs clarity on string format from dapp-kit.
+          }
+      } else {
+          console.warn('Frontend: bytesFromWallet is undefined/null or an unexpected type. Actual value:', bytesFromWallet);
+          // signedMessageBytesForBackendB64 remains empty
+      }
+      // ---- END: Added logs for signedMessageResult.bytes ----
+
+      const publicKeyBytes = currentAccount.publicKey;
+      const signatureScheme = (signedMessageResult as any).signatureScheme || (currentAccount as any).signatureScheme || 'unknown';
+      if (signatureScheme === 'unknown') {
+        console.warn('CreateTalePage.tsx: Signature scheme could not be determined. Backend verification might be affected.');
+      }
+
+      if (!signedMessageBytesForBackendB64) {
+        console.error('Frontend: signedMessageBytesForBackendB64 is empty. Aborting submission.');
+        enqueueSnackbar('Failed to prepare signed message for backend. Please try again.', { variant: 'error' });
+        return; // or setIsSaving(false) if not relying on react-query for this specific error path
+      }
+
+      const taleDataForBackend: FrontendInitiatePublicationDto = {
         title,
         description,
-        content: cleanedHtml, 
-        coverImage,
-        tags,
+        content: cleanedHtml,
+        coverImage: coverImage || undefined,
+        tags: tags || [],
         wordCount,
         readingTime,
-        // Data for backend verification and Walrus interaction
         userAddress: currentAccount.address,
-        signature: signedMessageResult.signature, // User's signature for the message
-        // The original message (as bytes or string) needs to be sent so the backend can verify the signature against it.
-        // Sending the original string `messageToSign` is often easier for the backend to reconstruct.
-        originalMessage: messageToSign, 
+        signature_base64: signedMessageResult.signature, // This is already base64 string
+        signedMessageBytes_base64: signedMessageBytesForBackendB64,
+        publicKey_base64: Buffer.from(publicKeyBytes).toString('base64'),
+        signatureScheme: signatureScheme,
       };
 
-      // TODO: Implement backend endpoint (e.g., /api/publish-tale-step1 or /api/tales/initiate-walrus-upload)
-      // This endpoint will:
-      //    a. Verify the signature (userAddress, originalMessage, signature).
-      //    b. If verified, upload `content` to Walrus using the backend's Walrus client and key.
-      //    c. Get the `blobId` from Walrus.
-      //    d. Then, (either in the same endpoint or a subsequent call) call the Sui contract's `publish` function 
-      //       with the `blobId` and `title`, signed by the backend's key (as it was before).
-      //    e. Return the final transaction digest or success status to the frontend.
-      
-      // For now, we just log the data and show a temporary message.
-      // The actual call to `createTale` (or a new function) is commented out until the backend is ready.
-      console.log('Data prepared for backend (Walrus auth + content):', taleDataForBackend);
-      // const finalResult = await createTale(taleDataForBackend); // This will need to be adjusted or replaced
-      enqueueSnackbar('Content ready for backend processing (Walrus & Sui publish pending).', { variant: 'info' });
+      console.log('CreateTalePage.tsx: Submitting to initiatePublication:', taleDataForBackend);
 
-      // console.log('Tale publishing process initiated:', finalResult);
-      setLastSaved(new Date());
+      const result = await initiatePublication(taleDataForBackend);
+
+      console.log('Backend response (initiatePublication):', result);
+      enqueueSnackbar('Tale submitted successfully! Processing publication.', { variant: 'success' });
+
+      // Clear form and local storage on success
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+      editor?.commands.setContent(''); // Clear editor content
+      setTitle('');
+      setDescription('');
+      setCoverImage('');
+      setTags([]);
+      setWordCount(0);
+      setReadingTime(0);
+      // Consider navigating the user or updating UI further
 
     } catch (error) {
-      console.error('Error during message signing or data preparation:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      enqueueSnackbar(`Operation failed: ${errorMessage}`, { variant: 'error' });
-    } finally {
-      setIsSaving(false);
+      console.error('Error during save/publish process:', error);
+      // The error object from react-query will likely be an Error instance.
+      // If talesApi throws an error with a message, it should be here.
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during publication.';
+      enqueueSnackbar(`Failed to publish: ${errorMessage}`, { variant: 'error' });
     }
   };
 
@@ -324,7 +387,7 @@ const CreateTalePage: React.FC = () => {
         wordCount={wordCount}
         readingTime={readingTime}
         lastSaved={lastSaved}
-        isSaving={isSaving}
+        isSaving={isPublishing}
         isUploadingCover={isUploadingCover}
         onTogglePreview={togglePreview}
         onToggleMetadata={toggleMetadata}

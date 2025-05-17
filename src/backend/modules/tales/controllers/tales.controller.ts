@@ -26,6 +26,7 @@ import {
 import { TalesService } from '../services/tales.service';
 import { CreateTaleDto } from '../dto/create-tale.dto';
 import { UpdateTaleDto } from '../dto/update-tale.dto';
+import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
 import { Tale } from '../schemas/tale.schema';
 import { Express } from 'express';
 
@@ -56,8 +57,23 @@ interface MulterFile {
 export class TalesController {
   constructor(private readonly talesService: TalesService) {}
 
+  @Post('initiate-publication')
+  @ApiOperation({ summary: 'Initiate publication of a new tale with Walrus and Sui contract interaction' })
+  @ApiResponse({ status: 201, description: 'Tale publication process initiated successfully.' })
+  @ApiResponse({ status: 400, description: 'Invalid input or signature verification failed' })
+  @ApiBody({ type: InitiatePublicationDto })
+  async initiatePublication(@Body() initiatePublicationDto: InitiatePublicationDto): Promise<any> {
+    console.log('[TalesController] initiatePublication CALLED with DTO:', JSON.stringify(initiatePublicationDto, null, 2));
+    try {
+      return await this.talesService.initiatePublication(initiatePublicationDto);
+    } catch (error) {
+      console.error('[TalesController] Error in initiatePublication:', error);
+      throw error; // Re-throw to be handled by NestJS default exception filter
+    }
+  }
+
   @Post()
-  @ApiOperation({ summary: 'Create a new tale' })
+  @ApiOperation({ summary: 'Create a new tale (Legacy - prefer /initiate-publication)' })
   @ApiResponse({ status: 201, description: 'Tale created successfully', type: Tale })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiBody({ type: CreateTaleDto })
