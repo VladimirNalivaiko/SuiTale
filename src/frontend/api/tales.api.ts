@@ -33,6 +33,22 @@ export interface CreateTalePayload {
 
 export interface UpdateTalePayload extends Partial<CreateTalePayload> {}
 
+// DTO for the new initiate-publication endpoint
+export interface FrontendInitiatePublicationDto {
+  title: string;
+  description: string;
+  content: string;
+  coverImage?: string;
+  tags?: string[];
+  wordCount: number;
+  readingTime: number;
+  userAddress: string;
+  signature_base64: string;
+  signedMessageBytes_base64: string;
+  publicKey_base64: string;
+  signatureScheme: string;
+}
+
 // API functions
 export const talesApi = {
   // Get all tales with pagination
@@ -68,7 +84,7 @@ export const talesApi = {
     return await response.json();
   },
 
-  // Create a new tale
+  // Create a new tale (legacy)
   async createTale(tale: CreateTalePayload): Promise<Tale> {
     console.log(tale);
     console.log(import.meta.env);
@@ -85,6 +101,25 @@ export const talesApi = {
       throw new Error(`API error: ${response.status}`);
     }
     
+    return await response.json();
+  },
+
+  // Initiate publication flow
+  async initiatePublication(payload: FrontendInitiatePublicationDto): Promise<Tale> { // Assuming backend returns the created Tale
+    const response = await fetch(`${API_BASE_URL}/tales/initiate-publication`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      // Try to parse error message from backend
+      const errorData = await response.json().catch(() => ({ message: `API error: ${response.status} ${response.statusText}` }));
+      throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
+    }
+
     return await response.json();
   },
 

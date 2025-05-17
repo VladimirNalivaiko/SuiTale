@@ -26,9 +26,10 @@ import {
   bottomToolbarStyles,
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
-import { useCreateTale, useUploadCoverImage } from '../../hooks/useTales';
-import { CreateTalePayload } from '../../api/tales.api';
+import { useCreateTale, useUploadCoverImage, useInitiatePublication } from '../../hooks/useTales';
 import { useSnackbar } from 'notistack';
+import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
+import { FrontendInitiatePublicationDto } from '../../api/tales.api';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -53,6 +54,7 @@ const SUGGESTED_TAGS = [
 const READING_SPEED = 200;
 
 const CreateTalePage: React.FC = () => {
+  const currentAccount = useCurrentAccount();
   const [title, setTitle] = useState<string>('');
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [coverImage, setCoverImage] = useState<string>('');
@@ -72,8 +74,10 @@ const CreateTalePage: React.FC = () => {
 
   // React Query hooks
   const { mutateAsync: createTale } = useCreateTale();
-  const { mutateAsync: uploadCover } = useUploadCoverImage();
+  const { mutateAsync: uploadCover, isPending: isUploadingCoverMutation } = useUploadCoverImage();
   const { enqueueSnackbar } = useSnackbar();
+  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
+  const { mutateAsync: initiatePublication, isPending: isPublishing } = useInitiatePublication();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -187,11 +191,10 @@ const CreateTalePage: React.FC = () => {
     if (file) {
       setIsUploadingCover(true);
       try {
-        // Upload to the server using the useUploadCoverImage hook's mutation
-        const uploadResponse = await uploadCover(file); 
-        const serverCoverImageUrl = uploadResponse.coverImage; // This is the base64 data URL from the server
+        const uploadResponse = await uploadCover(file);
+        const serverCoverImageUrl = uploadResponse.coverImage;
 
-        setCoverImage(serverCoverImageUrl); // Update state with server-provided URL
+        setCoverImage(serverCoverImageUrl);
         localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, serverCoverImageUrl);
         setLastSaved(new Date());
         enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
@@ -200,9 +203,6 @@ const CreateTalePage: React.FC = () => {
         console.error('Error uploading cover image:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error during upload';
         enqueueSnackbar(`Failed to upload cover image: ${errorMessage}`, { variant: 'error' });
-        // Optionally, clear the cover image if upload fails or revert to a placeholder/previous one
-        // setCoverImage(''); 
-        // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
       } finally {
         setIsUploadingCover(false);
       }
@@ -226,80 +226,152 @@ const CreateTalePage: React.FC = () => {
 
   // Handle save/publish
   const handleSave = async () => {
-    setIsSaving(true);
-    // Get the raw HTML content from the editor
+    if (!currentAccount || !currentAccount.publicKey) {
+      enqueueSnackbar('Wallet not connected or missing public key.', { variant: 'warning' });
+      return;
+    }
+
     const rawHtml = editor?.getHTML() || '';
-
-    // --- Start of more robust HTML cleaning ---
-
-    // 1. Remove HTML comments
     let cleanedHtml = rawHtml.replace(/<!--.*?-->/gs, '');
-
-    // 2. Iteratively remove empty block-level tags
-    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li']; // Add more tags if needed
+    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li'];
     let previousHtml;
     do {
         previousHtml = cleanedHtml;
         tagsToClean.forEach(tag => {
-            // Matches <tag> potentially followed by whitespace </tag>
             const regex = new RegExp(`<${tag}[^>]*>\\s*<\\/${tag}>`, 'gi');
             cleanedHtml = cleanedHtml.replace(regex, '');
         });
-        // Trim leading/trailing whitespace after each pass to help catch nested structures
         cleanedHtml = cleanedHtml.trim();
-    } while (previousHtml !== cleanedHtml && cleanedHtml.length > 0); // Repeat until no more changes or string becomes empty
+    } while (cleanedHtml !== previousHtml && cleanedHtml.length > 0);
 
-    // --- End of HTML cleaning ---
 
-    // Check if the content is empty after cleaning
-    if (!cleanedHtml) {
-        enqueueSnackbar('Content cannot be empty after cleaning.', { variant: 'warning' });
-        setIsSaving(false);
+    if (!cleanedHtml || cleanedHtml === '<p></p>') {
+      enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
+      return;
+    }
+
+    if (!title.trim()) {
+      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
+      return;
+    }
+    
+    if (!description.trim()) {
+        enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
         return;
     }
 
     try {
-      // Create tale data object using the cleaned HTML
-      const taleData: CreateTalePayload = {
+      const messageToSign = `SuiTale content upload authorization for user ${currentAccount.address}. Title: ${title}`;
+      const messageBytes = new TextEncoder().encode(messageToSign);
+
+      const signedMessageResult = await signPersonalMessage({
+        message: messageBytes,
+      });
+      const bytesFromWallet = signedMessageResult.bytes; // Type string | Uint8Array
+
+      // ---- START: Added logs for signedMessageResult.bytes ----
+      console.log('Frontend: signedMessageResult (full object from signPersonalMessage):', signedMessageResult);
+      console.log('Frontend: bytesFromWallet (type):', typeof bytesFromWallet, bytesFromWallet);
+
+      let rawBytesToEncode: Uint8Array | undefined;
+      let signedMessageBytesForBackendB64: string = ''; // Initialize to empty string
+
+      if (bytesFromWallet && typeof bytesFromWallet !== 'string') { // Primary check: exists and not a string
+          // We expect this to be Uint8Array or something Buffer.from can handle as such
+          // This path is taken if bytesFromWallet is an object, likely Uint8Array
+          rawBytesToEncode = bytesFromWallet as Uint8Array; // Proceed with assumption
+          console.log('Frontend: bytesFromWallet is treated as Uint8Array-like.');
+          try {
+              const bufferForHex = Buffer.from(rawBytesToEncode);
+              console.log('Frontend: bytesFromWallet HEX:', bufferForHex.toString('hex'));
+              console.log('Frontend: bytesFromWallet Length:', bufferForHex.length);
+              signedMessageBytesForBackendB64 = bufferForHex.toString('base64'); // Encode here once confirmed valid
+          } catch (e) {
+              console.error('Frontend: Error processing non-string bytesFromWallet for logging/encoding:', e);
+              // signedMessageBytesForBackendB64 remains empty or previous value if error
+          }
+      } else if (typeof bytesFromWallet === 'string') {
+          console.warn('Frontend: bytesFromWallet is a STRING. This is usually unexpected for .bytes from signPersonalMessage.');
+          // If it's a string, it might be already base64 encoded, or it might be a plain string (needs encoding).
+          // For now, let's assume if it's a string, it IS the base64 encoded version of what was signed.
+          // This aligns with `signedMessageResult.signature` which is also a base64 string.
+          // However, the DTO expects base64 of the *raw message bytes* that were signed (with Sui prefix).
+          // If dapp-kit for some reason returns a string here for .bytes, clarification on its format is needed.
+          // Let's log its hex if we treat it as base64. The backend expects base64 of the *actual signed bytes*.
+          signedMessageBytesForBackendB64 = bytesFromWallet; // Tentatively assign, assuming it IS the correct base64 string.
+                                                         // If not, backend will fail verification.
+          try {
+            const decodedForLog = Buffer.from(bytesFromWallet, 'base64');
+            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded HEX for log:', decodedForLog.toString('hex'));
+            console.log('Frontend: bytesFromWallet (if string, assuming it IS base64) Decoded Length for log:', decodedForLog.length);
+          } catch (decodeError) {
+            console.error('Frontend: Failed to decode bytesFromWallet assuming it was a base64 string (for logging). It might be a plain string or invalid base64.:', decodeError);
+            // If it was a plain string, it should have been new TextEncoder().encode(bytesFromWallet) then to base64.
+            // But signPersonalMessage.bytes is expected to be the raw signed bytes (prefixed by wallet).
+            // Resetting to empty if it wasn't valid base64, as the assumption failed.
+            // signedMessageBytesForBackendB64 = ''; // Or handle as plain text that needs encoding? Needs clarity on string format from dapp-kit.
+          }
+      } else {
+          console.warn('Frontend: bytesFromWallet is undefined/null or an unexpected type. Actual value:', bytesFromWallet);
+          // signedMessageBytesForBackendB64 remains empty
+      }
+      // ---- END: Added logs for signedMessageResult.bytes ----
+
+      const publicKeyBytes = currentAccount.publicKey;
+      const signatureScheme = (signedMessageResult as any).signatureScheme || (currentAccount as any).signatureScheme || 'unknown';
+      if (signatureScheme === 'unknown') {
+        console.warn('CreateTalePage.tsx: Signature scheme could not be determined. Backend verification might be affected.');
+      }
+
+      if (!signedMessageBytesForBackendB64) {
+        console.error('Frontend: signedMessageBytesForBackendB64 is empty. Aborting submission.');
+        enqueueSnackbar('Failed to prepare signed message for backend. Please try again.', { variant: 'error' });
+        return; // or setIsSaving(false) if not relying on react-query for this specific error path
+      }
+
+      const taleDataForBackend: FrontendInitiatePublicationDto = {
         title,
         description,
-        content: cleanedHtml, // Use the thoroughly cleaned content
-        coverImage,
-        tags,
-        // Note: wordCount and readingTime might be inaccurate after cleaning.
-        // Consider recalculating based on cleanedHtml if precision is critical.
+        content: cleanedHtml,
+        coverImage: coverImage || undefined,
+        tags: tags || [],
         wordCount,
-        readingTime
+        readingTime,
+        userAddress: currentAccount.address,
+        signature_base64: signedMessageResult.signature, // This is already base64 string
+        signedMessageBytes_base64: signedMessageBytesForBackendB64,
+        publicKey_base64: Buffer.from(publicKeyBytes).toString('base64'),
+        signatureScheme: signatureScheme,
       };
 
-      // Send to backend API using React Query
-      const savedTale = await createTale(taleData);
+      console.log('CreateTalePage.tsx: Submitting to initiatePublication:', taleDataForBackend);
 
-      console.log('Tale saved successfully:', savedTale);
+      const result = await initiatePublication(taleDataForBackend);
 
-      // Clear local storage after successful save (optional)
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER); // Also consider clearing cover, description, tags
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
-      // localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+      console.log('Backend response (initiatePublication):', result);
+      enqueueSnackbar('Tale submitted successfully! Processing publication.', { variant: 'success' });
 
+      // Clear form and local storage on success
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+      editor?.commands.setContent(''); // Clear editor content
+      setTitle('');
+      setDescription('');
+      setCoverImage('');
+      setTags([]);
+      setWordCount(0);
+      setReadingTime(0);
+      // Consider navigating the user or updating UI further
 
-      // Set last saved time
-      setLastSaved(new Date());
-
-      // Show success message
-      enqueueSnackbar('Tale saved successfully!', { variant: 'success' });
-
-      // Optionally redirect to the tale view page
-      // history.push(`/tales/${savedTale.id}`);
     } catch (error) {
-      console.error('Error saving tale:', error);
-      // Provide more specific error feedback if possible
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      enqueueSnackbar(`Failed to save tale: ${errorMessage}`, { variant: 'error' });
-    } finally {
-      setIsSaving(false);
+      console.error('Error during save/publish process:', error);
+      // The error object from react-query will likely be an Error instance.
+      // If talesApi throws an error with a message, it should be here.
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred during publication.';
+      enqueueSnackbar(`Failed to publish: ${errorMessage}`, { variant: 'error' });
     }
   };
 
@@ -315,13 +387,13 @@ const CreateTalePage: React.FC = () => {
         wordCount={wordCount}
         readingTime={readingTime}
         lastSaved={lastSaved}
-        isSaving={isSaving}
+        isSaving={isPublishing}
         isUploadingCover={isUploadingCover}
         onTogglePreview={togglePreview}
         onToggleMetadata={toggleMetadata}
         onSave={handleSave}
       />
-
+      
       {/* Editor */}
       <Box sx={editorContentStyles}>
         {/* Cover Image */}

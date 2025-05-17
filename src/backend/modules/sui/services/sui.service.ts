@@ -4,7 +4,7 @@ import { Transaction } from '@mysten/sui/transactions';
 import { WalrusClient } from '@mysten/walrus';
 
 export class SuiService {
-    private readonly suiClient: SuiClient;
+    public readonly suiClient: SuiClient;
 
     constructor() {
         this.suiClient = new SuiClient({

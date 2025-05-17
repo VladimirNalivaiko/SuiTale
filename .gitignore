@@ -140,3 +140,5 @@ dist
 
 /contracts/build
 .DS_Store
+
+/Docs
