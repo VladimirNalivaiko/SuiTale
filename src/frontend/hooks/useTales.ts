@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { 
   talesApi, 
-  Tale, 
+  TaleSummary,
   TaleWithContent, 
   CreateTalePayload, 
   UpdateTalePayload,
@@ -31,7 +31,7 @@ export const taleKeys = {
 export const useTales = (
   limit = 10, 
   offset = 0, 
-  options?: UseQueryOptions<Tale[], Error, Tale[], QueryKey>
+  options?: UseQueryOptions<TaleSummary[], Error, TaleSummary[], QueryKey>
 ) => {
   return useQuery({
     queryKey: taleKeys.list({ limit, offset }),
@@ -41,15 +41,16 @@ export const useTales = (
 };
 
 /**
- * Get a single tale by ID
+ * Get a single tale summary by ID
  */
 export const useTale = (
   id: string,
-  options?: UseQueryOptions<Tale, Error, Tale, QueryKey>
+  options?: UseQueryOptions<TaleSummary, Error, TaleSummary, QueryKey>
 ) => {
   return useQuery({
     queryKey: taleKeys.detail(id),
     queryFn: () => talesApi.getTale(id),
+    enabled: !!id,
     ...options,
   });
 };
@@ -64,20 +65,20 @@ export const useTaleWithContent = (
   return useQuery({
     queryKey: [...taleKeys.detail(id), 'content'],
     queryFn: () => talesApi.getTaleWithContent(id),
+    enabled: !!id,
     ...options,
   });
 };
 
 /**
- * Create a new tale
+ * Create a new tale (Legacy or specific use case)
  */
 export const useCreateTale = () => {
   const queryClient = useQueryClient();
   
-  return useMutation<Tale, Error, CreateTalePayload>({
+  return useMutation<TaleSummary, Error, CreateTalePayload>({
     mutationFn: (tale: CreateTalePayload) => talesApi.createTale(tale),
     onSuccess: () => {
-      // Invalidate the tales list query to refetch
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
     },
   });
@@ -89,17 +90,13 @@ export const useCreateTale = () => {
 export const useInitiatePublication = () => {
   const queryClient = useQueryClient();
 
-  return useMutation<Tale, Error, FrontendInitiatePublicationDto>({
+  return useMutation<TaleSummary, Error, FrontendInitiatePublicationDto>({
     mutationFn: (payload: FrontendInitiatePublicationDto) => talesApi.initiatePublication(payload),
-    onSuccess: (createdTale) => {
-      // Invalidate the tales list query to refetch
+    onSuccess: (createdTaleSummary) => {
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
-      // Optionally, pre-fill the cache for the new tale's detail
-      // queryClient.setQueryData(taleKeys.detail(createdTale.id), createdTale);
+      // Optionally, pre-fill the cache for the new tale's summary
+      // queryClient.setQueryData(taleKeys.detail(createdTaleSummary.id), createdTaleSummary);
     },
-    // onError: (error) => { // Optional: specific error handling for this mutation
-    //   console.error("Error initiating publication:", error);
-    // }
   });
 };
 
@@ -109,12 +106,10 @@ export const useInitiatePublication = () => {
 export const useUpdateTale = (id: string) => {
   const queryClient = useQueryClient();
   
-  return useMutation<Tale, Error, UpdateTalePayload>({
+  return useMutation<TaleSummary, Error, UpdateTalePayload>({
     mutationFn: (tale: UpdateTalePayload) => talesApi.updateTale(id, tale),
-    onSuccess: (updatedTale) => {
-      // Update the tale in the cache
-      queryClient.setQueryData(taleKeys.detail(id), updatedTale);
-      // Invalidate the tales list query to refetch
+    onSuccess: (updatedTaleSummary) => {
+      queryClient.setQueryData(taleKeys.detail(id), updatedTaleSummary);
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
     },
   });
@@ -126,12 +121,10 @@ export const useUpdateTale = (id: string) => {
 export const useDeleteTale = () => {
   const queryClient = useQueryClient();
   
-  return useMutation<Tale, Error, string>({
+  return useMutation<void, Error, string>({
     mutationFn: (id: string) => talesApi.deleteTale(id),
     onSuccess: (_, id) => {
-      // Remove the tale from the cache
       queryClient.removeQueries({ queryKey: taleKeys.detail(id) });
-      // Invalidate the tales list query to refetch
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
     },
   });

@@ -28,7 +28,8 @@ import { CreateTaleDto } from '../dto/create-tale.dto';
 import { UpdateTaleDto } from '../dto/update-tale.dto';
 import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
 import { Tale } from '../schemas/tale.schema';
-import { Express } from 'express';
+import { TaleSummary } from '../services/tales.service';
+
 
 // Create local interface to avoid the Multer namespace issue
 interface MulterFile {
@@ -77,19 +78,19 @@ export class TalesController {
   @ApiResponse({ status: 201, description: 'Tale created successfully', type: Tale })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiBody({ type: CreateTaleDto })
-  async create(@Body() createTaleDto: CreateTaleDto): Promise<Tale> {
+  async create(@Body() createTaleDto: CreateTaleDto): Promise<TaleSummary> {
     return await this.talesService.create(createTaleDto);
   }
 
   @Get()
   @ApiOperation({ summary: 'Get all tales with pagination' })
-  @ApiResponse({ status: 200, description: 'List of tales', type: [Tale] })
+  @ApiResponse({ status: 200, description: 'List of tales', type: [TaleSummary] })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Maximum number of tales to return' })
   @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Skip first N tales' })
   async findAll(
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
-  ): Promise<Tale[]> {
+  ): Promise<TaleSummary[]> {
     return await this.talesService.findAll(limit, offset);
   }
 
@@ -98,7 +99,7 @@ export class TalesController {
   @ApiResponse({ status: 200, description: 'Tale found', type: Tale })
   @ApiResponse({ status: 404, description: 'Tale not found' })
   @ApiParam({ name: 'id', description: 'Tale ID' })
-  async findOne(@Param('id') id: string): Promise<Tale> {
+  async findOne(@Param('id') id: string): Promise<TaleSummary> {
     return await this.talesService.findOne(id);
   }
 
@@ -111,26 +112,13 @@ export class TalesController {
     return await this.talesService.getFullTale(id);
   }
 
-  @Put(':id')
-  @ApiOperation({ summary: 'Update a tale' })
-  @ApiResponse({ status: 200, description: 'Tale updated successfully', type: Tale })
-  @ApiResponse({ status: 404, description: 'Tale not found' })
-  @ApiParam({ name: 'id', description: 'Tale ID' })
-  @ApiBody({ type: UpdateTaleDto })
-  async update(
-    @Param('id') id: string,
-    @Body() updateTaleDto: UpdateTaleDto,
-  ): Promise<Tale> {
-    return await this.talesService.update(id, updateTaleDto);
-  }
-
   @Delete(':id')
   @ApiOperation({ summary: 'Delete a tale' })
   @ApiResponse({ status: 200, description: 'Tale deleted successfully', type: Tale })
   @ApiResponse({ status: 404, description: 'Tale not found' })
   @ApiParam({ name: 'id', description: 'Tale ID' })
-  async remove(@Param('id') id: string): Promise<Tale> {
-    return await this.talesService.remove(id);
+  async remove(@Param('id') id: string): Promise<void> {
+    await this.talesService.remove(id);
   }
 
   @Post('upload/cover')

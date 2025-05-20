@@ -17,10 +17,10 @@ export class CreateTaleDto {
   @IsNotEmpty()
   content: string = '';
   
-  @ApiProperty({ description: 'Base64 encoded cover image or URL', required: false })
+  @ApiProperty({ description: 'Full URL of the cover image from Walrus', required: false })
   @IsString()
   @IsOptional()
-  coverImage?: string;
+  coverImageUrl?: string;
   
   @ApiProperty({ description: 'Array of tags associated with the tale', type: [String], example: ['Blockchain', 'Tutorial', 'Sui'] })
   @IsArray()

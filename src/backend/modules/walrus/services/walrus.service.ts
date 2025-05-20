@@ -182,7 +182,16 @@ export class WalrusService {
                 epochs: epochs,
             });
 
-            const blobUrl = `https://cache.testnet.walrus.xyz/blob/${blobId}`;
+            // Get base URL from environment variable, with a fallback if not set
+            const publisherBaseUrl = this.configService.get<string>('WALRUS_PUBLISHER_BASE_URL');
+            if (!publisherBaseUrl) {
+                this.logger.error('WALRUS_PUBLISHER_BASE_URL is not set in environment variables.');
+                // Fallback or throw error - for now, let's log an error and potentially use a default or throw
+                // For robust behavior, you might want to throw an error here or have a default dev URL
+                throw new Error('WALRUS_PUBLISHER_BASE_URL is not configured.')
+            }
+
+            const blobUrl = `${publisherBaseUrl.replace(/\/$/, '')}/${blobId}`;
             this.logger.log(`File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`);
             return { blobId, url: blobUrl };
 

@@ -44,7 +44,14 @@ export class Tale extends Document {
         description: 'Base64 encoded cover image or URL',
         required: false,
     })
-    coverImage?: string;
+    coverImageUrl?: string;
+
+    @Prop()
+    @ApiProperty({
+        description: 'Walrus network cover image identifier (BlobId)',
+        required: false,
+    })
+    coverImageBlobId?: string;
 
     @Prop()
     @ApiProperty({

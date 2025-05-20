@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, CircularProgress, Container, Grid, Typography, Alert, Skeleton, useTheme } from '@mui/material';
 import { DefaultLayout } from '../../layouts';
 import { useTales } from '../../hooks/useTales';
-import { Tale } from '../../api/tales.api'; // Import Tale type from the api
+import { TaleSummary } from '../../api/tales.api'; // Changed from Tale to TaleSummary
 
 const TALES_PER_PAGE = 12;
 
@@ -31,7 +31,7 @@ const TaleCardSkeleton: React.FC = () => {
 };
 
 const TalesPage: React.FC = () => {
-  const [allTales, setAllTales] = useState<Tale[]>([]);
+  const [allTales, setAllTales] = useState<TaleSummary[]>([]);
   const [currentOffset, setCurrentOffset] = useState<number>(0);
   const [hasMoreToLoad, setHasMoreToLoad] = useState<boolean>(true);
   const navigate = useNavigate();
@@ -57,8 +57,10 @@ const TalesPage: React.FC = () => {
       }
     } else if (newTales && newTales.length === 0 && currentOffset > 0) {
       setHasMoreToLoad(false);
+    } else if (!newTales && !isLoading && !isFetching) {
+      setHasMoreToLoad(false);
     }
-  }, [newTales]);
+  }, [newTales, isLoading, isFetching, currentOffset]);
 
 
   const loadMoreTales = () => {
@@ -72,7 +74,7 @@ const TalesPage: React.FC = () => {
   };
 
   interface TaleCardProps {
-    tale: Tale; 
+    tale: TaleSummary;
     onClick: (id: string) => void;
   }
 
@@ -96,10 +98,10 @@ const TalesPage: React.FC = () => {
         }}
         onClick={() => onClick(String(tale.id))} 
       >
-        {tale.coverImage && (
+        {tale.coverImageUrl && (
           <Box
             component="img"
-            src={tale.coverImage}
+            src={tale.coverImageUrl}
             alt={tale.title}
             sx={{
               width: '100%',
@@ -129,7 +131,7 @@ const TalesPage: React.FC = () => {
             All Tales
           </Typography>
           <Grid container spacing={3}>
-            {Array.from(new Array(6)).map((_, index) => ( // Show 6 skeletons, for example
+            {Array.from(new Array(6)).map((_, index) => (
               <Grid item xs={12} sm={6} md={4} key={`skeleton-${index}`}>
                 <TaleCardSkeleton />
               </Grid>
@@ -176,8 +178,7 @@ const TalesPage: React.FC = () => {
           ))}
         </Grid>
 
-        {/* Show CircularProgress for subsequent fetches (load more) */}
-        {isFetching && (
+        {isFetching && currentOffset > 0 && (
           <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
             <CircularProgress />
           </Box>
