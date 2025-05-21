@@ -50,22 +50,47 @@ export interface UpdateTalePayload extends Partial<CreateTalePayload> {}
 export interface FrontendInitiatePublicationDto {
   title: string;
   content: string; // Main content for Walrus
-  userAddress: string;
+  userAddress: string; // Changed back from authorAddress
   signature_base64: string;
-  signedMessageBytes_base64: string;
+  signedMessageBytes_base64: string; // Added back
   publicKey_base64: string;
   signatureScheme: string;
   
   description?: string;
   coverImageWalrusUrl?: string; // Full URL from Walrus for the cover (as uploaded by useFiles hook)
 
-  mintPrice?: string; 
-  mintCapacity?: string;
+  mintPrice: string; // Changed to string
+  mintCapacity: string; // Changed to string
   royaltyFeeBps?: number; 
   
   tags?: string[];
   wordCount?: number;
   readingTime?: number;
+}
+
+// Added DTOs based on backend refactoring
+export interface TaleDataForRecord {
+  title: string;
+  description: string;
+  contentBlobId: string; 
+  coverImageWalrusUrl: string;
+  tags: string[];
+  wordCount: number;
+  readingTime: number;
+  authorAddress: string;
+  mintPrice: number; // MIST
+  mintCapacity: number;
+  royaltyFeeBps: number;
+}
+
+export interface PreparePublicationResultDto {
+  transactionBlockBytes: string;
+  taleDataForRecord: TaleDataForRecord;
+}
+
+export interface RecordPublicationDto {
+  txDigest: string;
+  taleDataForRecord: TaleDataForRecord;
 }
 
 // API functions
@@ -104,9 +129,23 @@ export const talesApi = {
     return await response.json();
   },
 
-  // Initiate publication flow - should return TaleSummary of the created tale
-  async initiatePublication(payload: FrontendInitiatePublicationDto): Promise<TaleSummary> { 
-    const response = await fetch(`${API_BASE_URL}/tales/initiate-publication`, {
+  // Renamed from initiatePublication to preparePublication to match backend service
+  async preparePublication(payload: FrontendInitiatePublicationDto): Promise<PreparePublicationResultDto> { 
+    const response = await fetch(`${API_BASE_URL}/tales/prepare-publication`, { // Endpoint updated
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `API error: ${response.status} ${response.statusText}` }));
+      throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
+    }
+    return await response.json();
+  },
+
+  // New function to record publication
+  async recordPublication(payload: RecordPublicationDto): Promise<TaleSummary> {
+    const response = await fetch(`${API_BASE_URL}/tales/record-publication`, { // New endpoint
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -141,12 +180,16 @@ export const talesApi = {
   // Upload a cover image - this remains the same
   async uploadCoverImage(file: File): Promise<UploadCoverResponse> {
     const formData = new FormData();
-    formData.append('coverImage', file);
-    const response = await fetch(`${API_BASE_URL}/files/upload-cover-to-walrus`, {
+    formData.append('file', file);
+    const response = await fetch(`${API_BASE_URL}/tales/upload/cover`, {
       method: 'POST',
       body: formData,
     });
-    if (!response.ok) throw new Error(`API error: ${response.status}`);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ message: `API error: ${response.status} ${response.statusText}` }));
+      console.error('Upload cover image failed:', errorData);
+      throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
+    }
     return await response.json();
   },
 }; 

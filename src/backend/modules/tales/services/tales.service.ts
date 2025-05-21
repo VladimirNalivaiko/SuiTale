@@ -7,7 +7,6 @@ import { UpdateTaleDto } from '../dto/update-tale.dto';
 import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
 import { WalrusService } from '../../walrus/services/walrus.service';
 import { SuiService } from '../../sui/services/sui.service';
-import { fromB64 } from '@mysten/sui/utils';
 import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
 import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
 import { PublicKey as SuiPublicKeyCryptography } from '@mysten/sui/cryptography';
@@ -25,11 +24,25 @@ export class TaleSummary {
   authorId?: string;
   createdAt: string;
   updatedAt: string;
-  suiTxDigest?: string; // Assuming you might want to return this too
+  suiTxDigest?: string;
+  suiObjectId?: string;
 }
 
 interface TaleWithContent extends TaleSummary {
   content: string;
+}
+
+// Interface for the new return type of prepareTalePublication
+export interface PreparePublicationResult {
+    transactionBlockBytes: string;
+    taleDataForRecord: any; // Consider defining a more specific type later
+}
+
+// DTO for recordTalePublication - define if not already present elsewhere
+// For now, assuming it expects txDigest and the taleDataForRecord from PreparePublicationResult
+export interface RecordPublicationData {
+    txDigest: string;
+    taleDataForRecord: any;
 }
 
 @Injectable()
@@ -56,12 +69,13 @@ export class TalesService {
             authorId: taleDoc.authorId,
             createdAt: taleDoc.createdAt.toISOString(),
             updatedAt: taleDoc.updatedAt.toISOString(),
-            suiTxDigest: (taleDoc as any).suiTxDigest,
+            suiTxDigest: taleDoc.suiTxDigest,
+            suiObjectId: taleDoc.suiObjectId,
         };
     }
 
-    async initiatePublication(dto: InitiatePublicationDto): Promise<TaleSummary> {
-        this.logger.log('[TalesService] initiatePublication CALLED with DTO:', JSON.stringify(dto, null, 2));
+    async prepareTalePublication(dto: InitiatePublicationDto): Promise<PreparePublicationResult> {
+        this.logger.log('[TalesService] prepareTalePublication CALLED with DTO:', JSON.stringify(dto, null, 2));
         let publicKey: SuiPublicKeyCryptography | undefined = undefined;
         
         let rawFlaggedPublicKeyBytes: Buffer;
@@ -161,9 +175,9 @@ export class TalesService {
         const taleAuthorMintBeneficiary = dto.userAddress;
         const taleRoyaltyFeeBps = dto.royaltyFeeBps !== undefined ? dto.royaltyFeeBps : 500; 
 
-        this.logger.debug(`[TalesService] Publishing to Sui with params: contentBlobId: ${contentBlobId}, title: ${dto.title}, desc_len: ${taleDescription.length}, coverUrl: ${taleCoverImageUrl}, price: ${taleMintPrice}, capacity: ${taleMintCapacity}, royalty: ${taleRoyaltyFeeBps}`);
+        this.logger.debug(`[TalesService] Building Sui transaction with params: contentBlobId: ${contentBlobId}, title: ${dto.title}, desc_len: ${taleDescription.length}, coverUrl: ${taleCoverImageUrl}, price: ${taleMintPrice}, capacity: ${taleMintCapacity}, royalty: ${taleRoyaltyFeeBps}`);
 
-        const suiTxDigest = await this.suiService.publishTaleTemplate(
+        const transactionBlockBytes = this.suiService.buildPublishTaleTemplateTransactionBlock(
             contentBlobId,
             dto.title,
             taleDescription,
@@ -173,25 +187,94 @@ export class TalesService {
             taleAuthorMintBeneficiary,
             taleRoyaltyFeeBps,
         );
-        this.logger.log(`[TalesService] Tale published to Sui. Tx Digest: ${suiTxDigest}`);
+        this.logger.log(`[TalesService] Sui transaction block built. Bytes length: ${transactionBlockBytes.length}`);
 
-        const newTaleData = {
+        // Prepare data for saving after successful transaction
+        const taleDataForRecord = {
             title: dto.title,
             description: taleDescription,
             blobId: contentBlobId,
-            coverImage: taleCoverImageUrl,
+            coverImageUrl: taleCoverImageUrl,
             tags: dto.tags || [],
             wordCount: dto.wordCount,
             readingTime: dto.readingTime,
             authorId: dto.userAddress,
-            suiTxDigest: suiTxDigest,
+            mintPrice: taleMintPrice,
+            mintCapacity: taleMintCapacity,
+            royaltyFeeBps: taleRoyaltyFeeBps,
         };
-
-        const createdTaleDoc = new this.taleModel(newTaleData);
-        const savedTaleDoc = await createdTaleDoc.save();
-        this.logger.log(`[TalesService] Tale saved to DB. ID: ${savedTaleDoc.id}`);
         
-        return this.mapToTaleSummary(savedTaleDoc);
+        return {
+            transactionBlockBytes,
+            taleDataForRecord,
+        };
+    }
+
+    async recordTalePublication(data: RecordPublicationData): Promise<TaleSummary> {
+        const { txDigest, taleDataForRecord } = data;
+        this.logger.log(`[TalesService] recordTalePublication CALLED with txDigest: ${txDigest}`);
+
+        try {
+            const txResponse = await this.suiService.suiClient.getTransactionBlock({
+                digest: txDigest,
+                options: { showEffects: true, showObjectChanges: true },
+            });
+
+            this.logger.debug('[TalesService] Fetched transaction block details:', JSON.stringify(txResponse, null, 2));
+
+            if (txResponse.effects?.status?.status !== 'success') {
+                this.logger.error(`[TalesService] Transaction ${txDigest} failed. Status: ${txResponse.effects?.status?.status}, Error: ${txResponse.effects?.status?.error}`);
+                throw new HttpException(
+                    `Sui transaction ${txDigest} failed or was not successful: ${txResponse.effects?.status?.error || 'Unknown error'}`,
+                    HttpStatus.EXPECTATION_FAILED,
+                );
+            }
+
+            this.logger.log(`[TalesService] Transaction ${txDigest} was successful.`);
+
+            let suiObjectId: string | undefined = undefined;
+            if (txResponse.objectChanges) {
+                for (const change of txResponse.objectChanges) {
+                    if (change.type === 'created' && change.objectType.endsWith('::publication::Tale')) {
+                        suiObjectId = change.objectId;
+                        this.logger.log(`[TalesService] Found created Tale Object ID: ${suiObjectId}`);
+                        break;
+                    }
+                }
+            }
+            
+            if (!suiObjectId && txResponse.effects?.created) { // Fallback if not found in objectChanges
+                 for (const createdObj of txResponse.effects.created) {
+                    // This is a less precise way, might need adjustment based on exact objectType string from your contract
+                    // if (createdObj.objectType && createdObj.objectType.includes('::Tale')) { 
+                    // For now, we rely on objectChanges which is more robust for specific type matching.
+                    // This part can be refined if objectChanges is not sufficient or available.
+                 }
+                 if (!suiObjectId) {
+                    this.logger.warn(`[TalesService] Could not find created Tale objectId in objectChanges for tx ${txDigest}. It might be in effects.created if the type can be reliably identified.`);
+                 }
+            }
+
+            const newTaleData = {
+                ...taleDataForRecord,
+                suiTxDigest: txDigest,
+                suiObjectId: suiObjectId, // May be undefined if not found
+            };
+
+            const createdTaleDoc = new this.taleModel(newTaleData);
+            const savedTaleDoc = await createdTaleDoc.save();
+            this.logger.log(`[TalesService] Tale record saved to DB. ID: ${savedTaleDoc.id}, Sui Object ID: ${suiObjectId}`);
+            
+            return this.mapToTaleSummary(savedTaleDoc);
+
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+            this.logger.error(`[TalesService] Error in recordTalePublication for txDigest ${txDigest}:`, error.stack);
+            throw new HttpException(
+                `Failed to record tale publication for tx ${txDigest}: ${error.message}`,
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
     }
 
     async create(createTaleDto: CreateTaleDto): Promise<TaleSummary> {

@@ -11,7 +11,9 @@ import {
   TaleWithContent, 
   CreateTalePayload, 
   UpdateTalePayload,
-  FrontendInitiatePublicationDto
+  FrontendInitiatePublicationDto,
+  PreparePublicationResultDto,
+  RecordPublicationDto
 } from '../api/tales.api';
 
 // Query keys
@@ -85,17 +87,29 @@ export const useCreateTale = () => {
 };
 
 /**
- * Initiate Publication for a new tale
+ * Hook for preparing a tale publication.
+ * Calls the `preparePublication` API endpoint.
  */
-export const useInitiatePublication = () => {
-  const queryClient = useQueryClient();
+export const usePreparePublication = () => {
+  return useMutation<PreparePublicationResultDto, Error, FrontendInitiatePublicationDto>({
+    mutationFn: (payload: FrontendInitiatePublicationDto) => talesApi.preparePublication(payload),
+    // onSuccess and onError can be handled by the component using the hook
+  });
+};
 
-  return useMutation<TaleSummary, Error, FrontendInitiatePublicationDto>({
-    mutationFn: (payload: FrontendInitiatePublicationDto) => talesApi.initiatePublication(payload),
-    onSuccess: (createdTaleSummary) => {
+/**
+ * Hook for recording a tale publication.
+ * Calls the `recordPublication` API endpoint.
+ */
+export const useRecordPublication = () => {
+  const queryClient = useQueryClient();
+  return useMutation<TaleSummary, Error, RecordPublicationDto>({
+    mutationFn: (payload: RecordPublicationDto) => talesApi.recordPublication(payload),
+    onSuccess: (newTale) => {
+      // Invalidate tales list to refetch
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
-      // Optionally, pre-fill the cache for the new tale's summary
-      // queryClient.setQueryData(taleKeys.detail(createdTaleSummary.id), createdTaleSummary);
+      // Optionally, update the cache for the newly created tale
+      queryClient.setQueryData(taleKeys.detail(newTale.id), newTale);
     },
   });
 };

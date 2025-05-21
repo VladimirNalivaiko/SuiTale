@@ -5,18 +5,18 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Link from '@tiptap/extension-link';
 import Image from '@tiptap/extension-image';
+import { SxProps, Theme } from '@mui/material/styles';
+
 import { 
-  NodeMenu, 
-  SlashCommands, 
-  FormattingMenu, 
-  EditorToolbar, 
+  EditorToolbar,
   CoverImageUpload,
   MetadataPanel,
   MetadataToggle,
   PreviewDialog,
   EditorHeader,
   SlashTip,
-  SlashCommandsMenu
+  SlashCommandsMenu,
+  SlashCommands
 } from '../../components/TaleEditor';
 import 'tippy.js/dist/tippy.css';
 import { 
@@ -26,17 +26,22 @@ import {
   bottomToolbarStyles,
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
-import { useCreateTale, useInitiatePublication } from '../../hooks/useTales';
+import { 
+  usePreparePublication,
+  useRecordPublication
+} from '../../hooks/useTales';
 import { useUploadCoverToWalrus } from '../../hooks/useFiles';
 import { useSnackbar } from 'notistack';
-import { useSignPersonalMessage, useCurrentAccount } from '@mysten/dapp-kit';
-import { FrontendInitiatePublicationDto, UploadCoverResponse } from '../../api/tales.api';
+import { useSignPersonalMessage, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { FrontendInitiatePublicationDto, PreparePublicationResultDto, RecordPublicationDto } from '../../api/tales.api';
+import { Transaction } from '@mysten/sui/transactions';
+import { Buffer } from 'buffer';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
   TITLE: 'tale-editor-title',
   CONTENT: 'tale-editor-content',
-  COVER: 'tale-editor-cover',
+  COVER_WALRUS_URL: 'tale-editor-cover-walrus-url',
   SLASH_TIP_SHOWN: 'tale-editor-slash-tip-shown',
   DESCRIPTION: 'tale-editor-description',
   TAGS: 'tale-editor-tags'
@@ -57,11 +62,12 @@ const READING_SPEED = 200;
 const CreateTalePage: React.FC = () => {
   const currentAccount = useCurrentAccount();
   const [title, setTitle] = useState<string>('');
-  const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
   
-  // New state for cover image file and its preview URL
+  // State for cover image
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string>('');
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
-  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string>(''); // Used for <CoverImageUpload preview
+  const [coverImageWalrusUrl, setCoverImageWalrusUrl] = useState<string>('');
   
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [showSlashTip, setShowSlashTip] = useState<boolean>(true);
@@ -74,12 +80,18 @@ const CreateTalePage: React.FC = () => {
   const [wordCount, setWordCount] = useState<number>(0);
   const [readingTime, setReadingTime] = useState<number>(0);
 
-  // React Query hooks
-  const { mutateAsync: createTale } = useCreateTale();
-  const { mutateAsync: uploadCoverToWalrus, isPending: isUploadingCoverToWalrus } = useUploadCoverToWalrus();
+  // Minting details (example values, can be form inputs)
+  const [mintPrice, setMintPrice] = useState<string>('100000000'); // 0.1 SUI in MIST
+  const [mintCapacity, setMintCapacity] = useState<string>('100');
+  const [royaltyFeeBps, setRoyaltyFeeBps] = useState<number>(500); // 5%
+
+  // React Query hooks & Dapp-kit hooks
+  const { mutateAsync: uploadCoverToWalrus, isPending: isUploadingCover } = useUploadCoverToWalrus();
   const { enqueueSnackbar } = useSnackbar();
   const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { mutateAsync: initiatePublication, isPending: isPublishing } = useInitiatePublication();
+  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  const { mutateAsync: preparePublicationMutate, isPending: isPreparingPublication } = usePreparePublication();
+  const { mutateAsync: recordPublicationMutate, isPending: isRecordingPublication } = useRecordPublication();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -145,15 +157,17 @@ const CreateTalePage: React.FC = () => {
   useEffect(() => {
     const savedTitle = localStorage.getItem(LOCAL_STORAGE_KEYS.TITLE);
     const savedContent = localStorage.getItem(LOCAL_STORAGE_KEYS.CONTENT);
-    // const savedCoverUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER); // We don't store the file, maybe a URL if uploaded previously?
-                                                                       // For simplicity, let's not reload cover from localStorage for now, user re-selects.
+    const savedCoverWalrusUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
     const tipShown = localStorage.getItem(LOCAL_STORAGE_KEYS.SLASH_TIP_SHOWN);
     const savedDescription = localStorage.getItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
     const savedTags = localStorage.getItem(LOCAL_STORAGE_KEYS.TAGS);
     
     if (savedTitle) setTitle(savedTitle);
     if (savedContent && editor) editor.commands.setContent(savedContent);
-    // if (savedCoverUrl) setCoverPreviewUrl(savedCoverUrl); // If you want to restore a previously uploaded Walrus URL
+    if (savedCoverWalrusUrl) {
+      setCoverImageWalrusUrl(savedCoverWalrusUrl);
+      setCoverPreviewUrl(savedCoverWalrusUrl);
+    }
     if (tipShown === 'true') setShowSlashTip(false);
     if (savedDescription) setDescription(savedDescription);
     if (savedTags) setTags(JSON.parse(savedTags));
@@ -185,26 +199,42 @@ const CreateTalePage: React.FC = () => {
     }
   }, [tags]);
 
+  // Auto-save cover Walrus URL
+  useEffect(() => {
+    if (coverImageWalrusUrl) {
+      localStorage.setItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL, coverImageWalrusUrl);
+      setLastSaved(new Date());
+    }
+  }, [coverImageWalrusUrl]);
+
   // Updated Handle cover image selection
   const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log('[CreateTalePage] handleCoverUpload (file selection) triggered!');
     const file = event.target.files?.[0];
     if (file) {
       console.log('[CreateTalePage] File selected for cover:', file.name);
-      setCoverImageFile(file); // Store the file object
+      setCoverImageFile(file);
 
-      // Create a preview URL for the selected file
+      // Show local preview immediately
       const reader = new FileReader();
       reader.onloadend = () => {
         setCoverPreviewUrl(reader.result as string);
       };
       reader.readAsDataURL(file);
-      // No localStorage saving here, file is kept in state until publish
-      setLastSaved(new Date()); // Indicate change
-      enqueueSnackbar('Cover image selected. It will be uploaded on publication.', { variant: 'info' });
+      
+      // Clear any old Walrus URL since a new file is selected and not yet uploaded.
+      // The actual upload will happen in handlePublish.
+      setCoverImageWalrusUrl(''); 
+      setLastSaved(new Date());
     } else {
+      // If no file is selected (e.g., user cancels file dialog)
+      // Behavior might depend on whether there was a file selected before or a walrus URL
+      // For now, if user cancels, we clear the potential new file and its preview
       setCoverImageFile(null);
-      setCoverPreviewUrl('');
+      // If there was a coverImageWalrusUrl (from previous save/load), coverPreviewUrl should revert to it
+      // If not, then clear preview. This logic can be refined based on desired UX.
+      const savedWalrusUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
+      setCoverPreviewUrl(savedWalrusUrl || ''); 
     }
   };
 
@@ -223,10 +253,10 @@ const CreateTalePage: React.FC = () => {
     setTags(newTags);
   };
 
-  // BIG UPDATE: Handle save/publish with new cover upload flow
-  const handleSave = async () => {
-    if (!currentAccount || !currentAccount.publicKey) {
-      enqueueSnackbar('Wallet not connected or missing public key.', { variant: 'warning' });
+  const handlePublish = async () => {
+    // Initial validations (wallet, title, description, content)
+    if (!currentAccount || !currentAccount.publicKey || !currentAccount.address || !currentAccount.chains || currentAccount.chains.length === 0) {
+      enqueueSnackbar('Wallet not connected or critical account information missing.', { variant: 'warning' });
       return;
     }
     if (!title.trim()) {
@@ -237,221 +267,248 @@ const CreateTalePage: React.FC = () => {
       enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
       return;
     }
-
-    const rawHtml = editor?.getHTML() || '';
-    let cleanedHtml = rawHtml.replace(/<!--.*?-->/gs, '');
-    const tagsToClean = ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'div', 'blockquote', 'li'];
-    let previousHtml;
-    do {
-        previousHtml = cleanedHtml;
-        tagsToClean.forEach(tag => {
-            const regex = new RegExp(`<${tag}[^>]*>\\s*<\\/${tag}>`, 'gi');
-            cleanedHtml = cleanedHtml.replace(regex, '');
-        });
-        cleanedHtml = cleanedHtml.trim();
-    } while (cleanedHtml !== previousHtml && cleanedHtml.length > 0);
-
+    const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim(); // Simplified cleaning for example
     if (!cleanedHtml || cleanedHtml === '<p></p>') {
-      enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
-      return;
+        enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
+        return;
     }
 
-    setIsSaving(true); // Combined loading state for the entire process
-    let finalCoverImageUrl: string | undefined = undefined;
+    // Crucial check: Ensure a cover image is either already uploaded or a new one is selected
+    if (!coverImageFile && !coverImageWalrusUrl) {
+        enqueueSnackbar('Please select or upload a cover image.', { variant: 'error' });
+        return;
+    }
+
+    setIsPublishing(true);
+    enqueueSnackbar('Preparing publication...', { variant: 'info' });
 
     try {
-      // Step 1: Upload cover image to Walrus if a new one is selected
-      
-
-      // Step 2: Sign message
-      const userAddress = currentAccount.address;
-      const messageToSign = String.raw `SuiTale content upload authorization for user ${userAddress}. Title: ${title}`;
+      // 1. User signs authorization message for the backend
+      const messageToSign = `SuiTale content upload authorization for user ${currentAccount.address}. Title: ${title}`;
       const messageBytes = new TextEncoder().encode(messageToSign);
       const signedMessageResult = await signPersonalMessage({ message: messageBytes });
-      const bytesFromWallet = signedMessageResult.bytes;
-      let signedMessageBytesForBackendB64: string = '';
-      if (bytesFromWallet && typeof bytesFromWallet !== 'string') {
-          const rawBytesToEncode = bytesFromWallet as Uint8Array;
-          signedMessageBytesForBackendB64 = Buffer.from(rawBytesToEncode).toString('base64');
-      } else if (typeof bytesFromWallet === 'string') {
-          signedMessageBytesForBackendB64 = bytesFromWallet;
-      } 
-
-      if (!signedMessageBytesForBackendB64) {
-        console.error('Frontend: signedMessageBytesForBackendB64 is empty. Aborting submission.');
-        enqueueSnackbar('Failed to prepare signed message for backend. Please try again.', { variant: 'error' });
-        setIsSaving(false);
+      
+      const publicKeyBytes = currentAccount.publicKey;
+      let publicKeyBase64: string;
+      if (publicKeyBytes && typeof (publicKeyBytes as any).BYTES_PER_ELEMENT === 'number') {
+        publicKeyBase64 = Buffer.from(publicKeyBytes as Uint8Array).toString('base64');
+      } else {
+        enqueueSnackbar('Invalid public key format.', {variant: 'error'});
+        setIsPublishing(false);
         return;
       }
-      const publicKeyBytes = currentAccount.publicKey;
       
-      let signatureScheme = 'unknown';
-      if (currentAccount && currentAccount.chains && currentAccount.chains.length > 0) {
-          const chainParts = currentAccount.chains[0].split(':');
-          if (chainParts.length > 1) {
-              signatureScheme = chainParts[1]; // e.g., 'ed25519' or 'secp256k1'
-          }
-      }
-      // Дополнительно можно попытаться извлечь из signedMessageResult, если первый способ не сработал,
-      // но обычно информация из currentAccount.chains более стабильна для определения типа ключа аккаунта.
-      if (signatureScheme === 'unknown' && (signedMessageResult as any)?.signatureScheme) {
-         signatureScheme = (signedMessageResult as any).signatureScheme;
+      let signatureScheme = 'sui';
+      if (currentAccount.chains && currentAccount.chains.length > 0) {
+        signatureScheme = currentAccount.chains[0].split(':')[0] || 'sui';
       }
 
-      if (signatureScheme === 'unknown') {
-        console.warn('CreateTalePage.tsx: Signature scheme could not be determined. Backend verification might be affected.');
-      }
-
-      if (coverImageFile) {
-        enqueueSnackbar('Uploading cover image to Walrus...', { variant: 'info' });
-        try {
-          const uploadResponse = await uploadCoverToWalrus(coverImageFile);
-          finalCoverImageUrl = uploadResponse.url;
-          enqueueSnackbar('Cover image uploaded to Walrus successfully!', { variant: 'success' });
-          if (finalCoverImageUrl) {
-            localStorage.setItem(LOCAL_STORAGE_KEYS.COVER, finalCoverImageUrl); // Save the final Walrus URL
-          }
-        } catch (uploadError) {
-          console.error('Error uploading cover image to Walrus during save process:', uploadError);
-          const errorMsg = uploadError instanceof Error ? uploadError.message : 'Cover upload failed';
-          enqueueSnackbar(`Failed to upload cover to Walrus: ${errorMsg}. Publication aborted.`, { variant: 'error' });
-          setIsSaving(false);
-          return;
-        }
-      } else {
-        // If no new file, check if there's a previously uploaded Walrus URL in localStorage (optional)
-        // finalCoverImageUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER) || undefined;
-        // For simplicity now, if no new file, no cover image is sent unless you explicitly load it from LS.
-      }
-
-            // Step 3: Prepare DTO and initiate publication
-      const taleDataForBackend: FrontendInitiatePublicationDto = {
-        title: title.trim(),
-        description: description.trim(),
+      // 2. Prepare publication (backend builds transaction, NO cover upload yet)
+      // coverImageWalrusUrl is omitted here or passed as undefined if a new file is pending
+      // It will be finalized in taleDataForRecord before calling recordPublication
+      const preparePayload: FrontendInitiatePublicationDto = {
+        title,
+        description,
         content: cleanedHtml,
-        coverImageWalrusUrl: finalCoverImageUrl, // Use the URL from Walrus upload (or undefined)
-        tags: tags.length > 0 ? tags : undefined,
+        coverImageWalrusUrl: coverImageFile ? undefined : coverImageWalrusUrl, // Pass existing URL only if no new file
+        tags,
         wordCount,
         readingTime,
-        userAddress,
+        userAddress: currentAccount.address,
         signature_base64: signedMessageResult.signature,
-        signedMessageBytes_base64: signedMessageBytesForBackendB64,
-        publicKey_base64: Buffer.from(publicKeyBytes).toString('base64'),
-        signatureScheme,
-        // Optional NFT params can be added here if UI exists for them
+        signedMessageBytes_base64: Buffer.from(messageBytes).toString('base64'),
+        publicKey_base64: publicKeyBase64,
+        signatureScheme: signatureScheme,
+        mintPrice: mintPrice,
+        mintCapacity: mintCapacity,
+        royaltyFeeBps,
       };
 
-      console.log('CreateTalePage.tsx: Submitting to initiatePublication:', taleDataForBackend);
+      const prepareResult = await preparePublicationMutate(preparePayload);
+      if (!prepareResult || !prepareResult.transactionBlockBytes || !prepareResult.taleDataForRecord) {
+        enqueueSnackbar('Failed to prepare publication: Invalid response from server.', { variant: 'error' });
+        setIsPublishing(false);
+        return;
+      }
       
+      let { transactionBlockBytes, taleDataForRecord } = prepareResult; // taleDataForRecord might miss cover url if new file
 
-      const result = await initiatePublication(taleDataForBackend);
-      console.log('Backend response (initiatePublication):', result);
-      enqueueSnackbar('Tale submitted successfully! Processing publication.', { variant: 'success' });
+      enqueueSnackbar('Please sign the transaction in your wallet to publish your tale.', { variant: 'info', persist: true });
 
-      // Clear form and relevant local storage on success
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER); // Remove cover as it's now part of published content
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
-      localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
-      editor?.commands.setContent('');
-      setTitle('');
-      setDescription('');
-      setCoverImageFile(null); // Clear selected file
-      setCoverPreviewUrl('');   // Clear preview
-      setTags([]);
-      setWordCount(0);
-      setReadingTime(0);
+      // 3. User signs and executes the blockchain transaction
+      const txb = Transaction.from(transactionBlockBytes);
+      const currentChainValue = currentAccount.chains[0];
+      
+      signAndExecuteTransaction(
+        { 
+          transaction: txb,
+          chain: currentChainValue as any,
+        },
+        {
+          onSuccess: async (result: { digest: string; [key: string]: any }) => {
+            enqueueSnackbar('Transaction submitted! Processing...', { variant: 'info', persist: true });
+            
+            let finalCoverImageUrlForRecord = taleDataForRecord.coverImageWalrusUrl; // From prepareResult initially
+            let mutableTaleDataForRecord = { ...taleDataForRecord }; // Make a mutable copy
 
-    } catch (error) {
-      console.error('Error during save/publish process:', error);
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred.';
-      enqueueSnackbar(`Failed to publish: ${errorMessage}`, { variant: 'error' });
-    } finally {
-      setIsSaving(false);
+            // 4. If blockchain TX is successful, upload cover if a new one was selected
+            if (coverImageFile) {
+              enqueueSnackbar('Uploading cover image...', { variant: 'info' });
+              try {
+                const uploadResult = await uploadCoverToWalrus(coverImageFile);
+                if (uploadResult && uploadResult.url) {
+                  finalCoverImageUrlForRecord = uploadResult.url;
+                  setCoverImageWalrusUrl(finalCoverImageUrlForRecord); // Update state for UI
+                  localStorage.setItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL, finalCoverImageUrlForRecord);
+                  setCoverImageFile(null); // Clear the file object
+                  enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
+                } else {
+                  throw new Error('Invalid response from cover upload server after transaction.');
+                }
+              } catch (uploadError: any) {
+                console.error('[CreateTalePage] Error uploading cover to Walrus after transaction:', uploadError);
+                enqueueSnackbar(`Error uploading cover post-transaction: ${uploadError.message || 'Unknown error'}. Please try again or contact support.`, { variant: 'error', persist: true });
+                // Decide recovery path: Here, we might allow recording without a cover or with an old one if available
+                // For now, if upload fails, we proceed with whatever finalCoverImageUrlForRecord holds (could be old or undefined)
+                // This might lead to a tale without a new cover if upload failed.
+                // A more robust solution would offer user to retry cover upload or cancel recording.
+              }
+            } else if (coverImageWalrusUrl) { // No new file, but an existing walrus URL from state (localStorage)
+                finalCoverImageUrlForRecord = coverImageWalrusUrl;
+            }
+
+            // Ensure we have a cover URL before recording, critical for DB record
+            if (!finalCoverImageUrlForRecord) {
+                enqueueSnackbar('Cover image is missing after transaction and upload attempt. Cannot record publication.', { variant: 'error', persist: true });
+                setIsPublishing(false); // Stop the process here
+                return;
+            }
+
+            mutableTaleDataForRecord.coverImageWalrusUrl = finalCoverImageUrlForRecord;
+
+            // 5. Record publication with backend
+            try {
+              enqueueSnackbar('Recording publication details...', {variant: 'info'});
+              const recordPayload: RecordPublicationDto = { 
+                txDigest: result.digest,
+                taleDataForRecord: mutableTaleDataForRecord, // Use the potentially updated record
+              };
+              const finalTale = await recordPublicationMutate(recordPayload);
+              
+              enqueueSnackbar(`Tale "${finalTale.title}" published successfully! Digest: ${result.digest}`, { variant: 'success' });
+              
+              // Clear form and local storage
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+              editor?.commands.setContent('');
+              setTitle('');
+              setDescription('');
+              setCoverImageWalrusUrl('');
+              setCoverPreviewUrl('');
+              setTags([]);
+              setCoverImageFile(null); // Ensure file is cleared
+            } catch (recordError: any) {
+              console.error('[CreateTalePage] Error recording publication:', recordError);
+              enqueueSnackbar(`Error recording publication: ${recordError.response?.data?.message || recordError.message || 'Unknown error'}. Your tale is on-chain but might not be listed. Digest: ${result.digest}`, { variant: 'error', persist: true });
+            } finally {
+              setIsPublishing(false); 
+            }
+          },
+          onError: (error: Error | any) => {
+            console.error('[CreateTalePage] Error signing/executing transaction:', error);
+            const signErrMessage = error instanceof Error ? error.message : 'Transaction signing failed';
+            enqueueSnackbar(`Transaction failed: ${signErrMessage}`, { variant: 'error' });
+            setIsPublishing(false);
+          }
+        }
+      );
+    } catch (error: any) {
+      console.error('[CreateTalePage] Error in handlePublish (outer try-catch): ', error);
+      const genErrMessage = error instanceof Error ? error.message : 'Publication process failed';
+      enqueueSnackbar(`Publication error: ${genErrMessage}`, { variant: 'error' });
+      setIsPublishing(false);
     }
   };
 
   if (!editor) return null;
 
   return (
-    <Box sx={editorContainerStyles}>
-      {/* Formatting menu that appears when text is selected */}
-      <FormattingMenu editor={editor} />
-
-      {/* Header */}
+    <Box sx={editorContainerStyles as SxProps<Theme>}>
       <EditorHeader 
+        isSaving={isPublishing || isUploadingCover}
+        isUploadingCover={isUploadingCover}
+        lastSaved={lastSaved}
+        onTogglePreview={togglePreview}
         wordCount={wordCount}
         readingTime={readingTime}
-        lastSaved={lastSaved}
-        isSaving={isPublishing || isUploadingCoverToWalrus}
-        onTogglePreview={togglePreview}
         onToggleMetadata={toggleMetadata}
-        onSave={handleSave}
+        onSave={handlePublish}
       />
       
-      {/* Editor */}
-      <Box sx={editorContentStyles}>
-        {/* Cover Image */}
+      <Box sx={{ 
+        width: '100%', 
+        maxWidth: 'calc(800px + 64px)',
+        mx: 'auto',
+        px: { xs: 2, sm: 4 },
+        mt: 3, 
+        mb: 3 
+      }}>
         <CoverImageUpload 
           coverImage={coverPreviewUrl}
           onCoverUpload={handleCoverUpload}
-          isUploading={isUploadingCoverToWalrus}
+          isUploading={isUploadingCover}
         />
+      </Box>
 
-        {/* Title input - borderless, large size */}
+      <Box sx={editorContentStyles as SxProps<Theme>}>
         <TextField
+          placeholder="Tale Title..."
+          variant="standard" 
+          fullWidth
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Title"
-          fullWidth
-          variant="standard"
-          sx={titleInputStyles}
-          inputProps={{
-            style: { caretColor: '#9c4dff' }
-          }}
+          sx={titleInputStyles as SxProps<Theme>}
+          InputProps={{ disableUnderline: true }} 
         />
-        
-        {/* Metadata panel */}
-        <MetadataPanel 
-          description={description}
-          tags={tags}
-          suggestedTags={SUGGESTED_TAGS}
-          open={metadataOpen}
-          onDescriptionChange={(e) => setDescription(e.target.value)}
-          onTagsChange={handleTagsChange}
-          onClose={toggleMetadata}
-        />
-        
-        {/* Metadata toggle when closed */}
-        {!metadataOpen && (
-          <MetadataToggle onClick={toggleMetadata} />
+        {editor && (
+          <Box sx={{ position: 'relative' }}>
+            <Box sx={tipTapEditorStyles as SxProps<Theme>}>
+              <EditorContent editor={editor} />
+            </Box>
+            
+            <Box sx={bottomToolbarStyles as SxProps<Theme>}>
+              <EditorToolbar editor={editor} />
+            </Box>
+            
+            {showSlashTip && <SlashTip show={showSlashTip} />}
+          </Box>
         )}
-
-        {/* Block menu for adding new content sections */}
-        <NodeMenu editor={editor} />
-
-        {/* Slash command hint - only show if not used before */}
-        <SlashTip show={showSlashTip} />
-
-        {/* Tiptap editor */}
-        <Box sx={tipTapEditorStyles}>
-          <EditorContent editor={editor} />
-        </Box>
       </Box>
-
-      {/* Bottom toolbar */}
-      <Box sx={bottomToolbarStyles}>
-        <EditorToolbar editor={editor} />
-      </Box>
-
-      {/* Preview Dialog */}
+      
+      <MetadataPanel
+        open={metadataOpen}
+        onClose={toggleMetadata}
+        description={description}
+        onDescriptionChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setDescription(e.target.value)}
+        tags={tags}
+        onTagsChange={handleTagsChange}
+        suggestedTags={SUGGESTED_TAGS}
+        mintPrice={mintPrice}
+        onMintPriceChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setMintPrice(e.target.value)}
+        mintCapacity={mintCapacity}
+        onMintCapacityChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setMintCapacity(e.target.value)}
+        royaltyFeeBps={royaltyFeeBps}
+        onRoyaltyFeeBpsChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRoyaltyFeeBps(Number(e.target.value))}
+      />
       <PreviewDialog 
-        open={previewOpen}
-        onClose={togglePreview}
-        title={title}
-        content={editor.getHTML()}
-        coverImage={coverPreviewUrl}
+        open={previewOpen} 
+        onClose={togglePreview} 
+        title={title} 
+        content={editor?.getHTML() || ''} 
+        coverImage={coverImageWalrusUrl || coverPreviewUrl}
         description={description}
         tags={tags}
         wordCount={wordCount}

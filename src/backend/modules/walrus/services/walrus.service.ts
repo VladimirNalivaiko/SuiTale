@@ -40,6 +40,12 @@ export class WalrusService {
         this.walrusClient = new WalrusClient({
             network,
             suiClient: this.suiClient as any, // Type assertion to bypass incompatible version issue
+            storageNodeClientOptions: {
+                // @ts-ignore: Suppressing error due to potentially outdated Walrus SDK version where onError might not exist
+                onError: (error: Error) => {
+                    this.logger.error('Walrus Storage Node Error:', error);
+                },
+            },
         });
 
         this.logger.log(`Walrus service initialized with network: ${network}`);
@@ -64,7 +70,7 @@ export class WalrusService {
         });
         console.log('WAL balance:', walBalance.totalBalance);
 
-        if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 1000) {
+        if (Number(walBalance.totalBalance) < Number(MIST_PER_SUI) / 1000000) {
             const tx = new Transaction();
 
             const exchange = await this.suiClient.getObject({
@@ -114,14 +120,11 @@ export class WalrusService {
                 blob: contentBytes,
                 deletable: false,
                 epochs: 3,
-
             });
-
+            let aggregatorPrefix = process.env.WALRUS_AGGREGATOR_PREFIX;
+            let blobUrl = `${aggregatorPrefix}/v1/blobs/${blobId}`;
             console.log('Blob ID:', blobId);
-            console.log(
-                'URL:',
-                `https://cache.testnet.walrus.xyz/blob/${blobId}`,
-            );
+            console.log('URL:', blobUrl);
             return blobId;
         } catch (error) {
             let message = 'Unknown Error';
@@ -163,14 +166,18 @@ export class WalrusService {
      * @returns An object containing the blobId and the direct URL to the blob.
      */
     public async uploadFileToWalrus(
-        fileBuffer: Uint8Array, 
-        deletable = false, 
-        epochs = 3
+        fileBuffer: Uint8Array,
+        deletable = false,
+        epochs = 3,
     ): Promise<{ blobId: string; url: string }> {
         try {
-            this.logger.log(`Walrus file upload started. Buffer length: ${fileBuffer.length}`);
+            this.logger.log(
+                `Walrus file upload started. Buffer length: ${fileBuffer.length}`,
+            );
             if (!this.keyPair) {
-                this.logger.warn('Walrus keyPair not initialized yet, attempting to initialize...');
+                this.logger.warn(
+                    'Walrus keyPair not initialized yet, attempting to initialize...',
+                );
                 this.keyPair = await this.getKeypair();
                 this.logger.log('Walrus keyPair initialized.');
             }
@@ -183,18 +190,23 @@ export class WalrusService {
             });
 
             // Get base URL from environment variable, with a fallback if not set
-            const publisherBaseUrl = this.configService.get<string>('WALRUS_PUBLISHER_BASE_URL');
+            const publisherBaseUrl = this.configService.get<string>(
+                'WALRUS_PUBLISHER_BASE_URL',
+            );
             if (!publisherBaseUrl) {
-                this.logger.error('WALRUS_PUBLISHER_BASE_URL is not set in environment variables.');
+                this.logger.error(
+                    'WALRUS_PUBLISHER_BASE_URL is not set in environment variables.',
+                );
                 // Fallback or throw error - for now, let's log an error and potentially use a default or throw
                 // For robust behavior, you might want to throw an error here or have a default dev URL
-                throw new Error('WALRUS_PUBLISHER_BASE_URL is not configured.')
+                throw new Error('WALRUS_PUBLISHER_BASE_URL is not configured.');
             }
 
             const blobUrl = `${publisherBaseUrl.replace(/\/$/, '')}/${blobId}`;
-            this.logger.log(`File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`);
+            this.logger.log(
+                `File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`,
+            );
             return { blobId, url: blobUrl };
-
         } catch (error) {
             let message = 'Unknown Error';
             if (error instanceof Error) message = error.message;

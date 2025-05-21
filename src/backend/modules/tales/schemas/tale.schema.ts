@@ -89,6 +89,20 @@ export class Tale extends Document {
     })
     authorId?: string;
 
+    @Prop()
+    @ApiProperty({
+        description: 'Sui transaction digest for the publication event',
+        required: false,
+    })
+    suiTxDigest?: string;
+
+    @Prop()
+    @ApiProperty({
+        description: 'Sui Object ID of the published Tale NFT',
+        required: false,
+    })
+    suiObjectId?: string;
+
     @Prop({ type: Date, default: Date.now })
     @ApiProperty({ description: 'Creation date and time' })
     createdAt: Date = new Date();

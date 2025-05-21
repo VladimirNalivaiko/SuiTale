@@ -15,6 +15,46 @@ export class SuiService {
         });
     }
     
+    buildPublishTaleTemplateTransactionBlock(
+        blobId: string,
+        title: string,
+        description: string,
+        coverImageUrl: string,
+        mintPrice: string, // Pass as string, convert to u64 in moveCall
+        mintCapacity: string, // Pass as string, convert to u64 in moveCall
+        authorMintBeneficiary: string, // address
+        royaltyFeeBps: number, // u16
+    ): string { // Returns serialized Transaction as base64 string
+        const packageId = process.env.CONTRACT_ADDRESS_TESTNET;
+        if (!packageId) {
+            throw new Error('CONTRACT_ADDRESS_TESTNET not set in .env');
+        }
+        if (!this.platformWalletAddress || this.platformWalletAddress === '0x0000000000000000000000000000000000000000000000000000000000000000') {
+            console.warn('PLATFORM_WALLET_ADDRESS is not set or is a placeholder, using default 0x0...');
+        }
+
+        const txb = new Transaction();
+
+        txb.moveCall({
+            package: packageId,
+            module: 'publication',
+            function: 'publish_tale_template',
+            arguments: [
+                txb.pure.string(blobId),
+                txb.pure.string(title),
+                txb.pure.string(description),
+                txb.pure.string(coverImageUrl),
+                txb.pure.u64(mintPrice),
+                txb.pure.u64(mintCapacity),
+                txb.pure.address(authorMintBeneficiary),
+                txb.pure.u16(royaltyFeeBps),
+                txb.pure.address(this.platformWalletAddress)
+            ],
+        });
+        
+        return txb.serialize();
+    }
+    
     async publishTaleTemplate(
         blobId: string,
         title: string,
