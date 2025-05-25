@@ -694,4 +694,166 @@ export class WalrusService {
             throw error;
         }
     }
+
+    /**
+     * Prepare batch upload transaction for cover image and content
+     * @param userAddress User's wallet address
+     * @param content Tale content as string
+     * @param coverImageBuffer Cover image as buffer
+     * @returns Batch transaction data with costs and metadata
+     */
+    public async prepareBatchUpload(
+        userAddress: string,
+        content: string, 
+        coverImageBuffer: Buffer
+    ): Promise<{
+        costs: {
+            coverBlob: { wal: number; mist: string };
+            contentBlob: { wal: number; mist: string };
+            totalGas: { sui: number; mist: string };
+            total: {
+                walTokens: number;
+                suiTokens: number;
+                walMist: string;
+                suiMist: string;
+            };
+        };
+        transaction: string; // serialized batch transaction
+        metadata: {
+            coverBlobId: string;
+            contentBlobId: string;
+            estimatedTime: string;
+        };
+    }> {
+        try {
+            this.logger.log('Preparing batch upload for cover + content');
+            
+            // 1. Encode both blobs
+            this.logger.debug('Step 1: Encoding cover image blob...');
+            const { 
+                blobId: coverBlobId, 
+                metadata: coverMetadata 
+            } = await this.walrusClient.encodeBlob(new Uint8Array(coverImageBuffer));
+            
+            this.logger.debug('Step 2: Encoding content blob...');
+            const contentBytes = new TextEncoder().encode(content);
+            const { 
+                blobId: contentBlobId, 
+                metadata: contentMetadata 
+            } = await this.walrusClient.encodeBlob(contentBytes);
+            
+            this.logger.debug(`Cover Blob ID: ${coverBlobId}, Content Blob ID: ${contentBlobId}`);
+            
+            // 2. Calculate storage costs for both blobs
+            const epochs = 5;
+            const coverUnencodedLength = parseInt(String(coverMetadata.V1.unencoded_length), 10);
+            const contentUnencodedLength = parseInt(String(contentMetadata.V1.unencoded_length), 10);
+            
+            this.logger.debug('Step 3: Calculating storage costs...');
+            const coverStorageCosts = await this.walrusClient.storageCost(coverUnencodedLength, epochs);
+            const contentStorageCosts = await this.walrusClient.storageCost(contentUnencodedLength, epochs);
+            
+            // 3. Create batch transaction with both registerBlob operations
+            this.logger.debug('Step 4: Creating batch transaction...');
+            const batchTx = new Transaction();
+            
+            // First: Register cover blob
+            const coverRegisterCall = batchTx.moveCall({
+                package: '0x015906b499d8cdc40f23ab94431bf3fe488a8548f8ae17199a72b2e9df341ca5', // Walrus package
+                module: 'blob',
+                function: 'register',
+                arguments: [
+                    batchTx.pure.string(coverBlobId),
+                    batchTx.pure.u64(coverUnencodedLength),
+                    batchTx.pure.u64(epochs),
+                    batchTx.pure.bool(false), // deletable
+                    batchTx.object('0xda799d85db0429765c8291c594d334349ef5bc09220e79ad397b30106161a0af'), // Subsidies object
+                ],
+            });
+            
+            // Second: Register content blob  
+            const contentRegisterCall = batchTx.moveCall({
+                package: '0x015906b499d8cdc40f23ab94431bf3fe488a8548f8ae17199a72b2e9df341ca5',
+                module: 'blob', 
+                function: 'register',
+                arguments: [
+                    batchTx.pure.string(contentBlobId),
+                    batchTx.pure.u64(contentUnencodedLength),
+                    batchTx.pure.u64(epochs),
+                    batchTx.pure.bool(false), // deletable
+                    batchTx.object('0xda799d85db0429765c8291c594d334349ef5bc09220e79ad397b30106161a0af'), // Subsidies object
+                ],
+            });
+            
+            batchTx.setSender(userAddress);
+            
+            // 4. Estimate gas costs via dry run
+            this.logger.debug('Step 5: Estimating gas costs...');
+            const serializedBatchTx = await batchTx.build({ client: this.suiClient as any });
+            const dryRunResult = await this.suiClient.dryRunTransactionBlock({
+                transactionBlock: serializedBatchTx,
+            });
+            
+            if (dryRunResult.effects.status.status !== 'success') {
+                this.logger.error('Dry run failed:', dryRunResult.effects.status.error);
+                throw new Error(`Dry run failed: ${dryRunResult.effects.status.error}`);
+            }
+            
+            // 5. Calculate costs in tokens
+            const totalGasRequired = BigInt(dryRunResult.effects.gasUsed.computationCost) + 
+                                   BigInt(dryRunResult.effects.gasUsed.storageCost);
+            const gasBuffer = totalGasRequired / 10n; // 10% buffer
+            const totalGasWithBuffer = totalGasRequired + gasBuffer;
+            
+            // Set gas budget
+            batchTx.setGasBudget(Number(totalGasWithBuffer));
+            
+            // Convert to token values
+            const coverWalTokens = Number(coverStorageCosts.totalCost) / Number(MIST_PER_SUI);
+            const contentWalTokens = Number(contentStorageCosts.totalCost) / Number(MIST_PER_SUI);
+            const gasSuiTokens = Number(totalGasWithBuffer) / Number(MIST_PER_SUI);
+            
+            const totalWalTokens = coverWalTokens + contentWalTokens;
+            const totalSuiTokens = gasSuiTokens;
+            
+            this.logger.log(`Batch costs calculated: Cover: ${coverWalTokens.toFixed(6)} WAL, Content: ${contentWalTokens.toFixed(6)} WAL, Gas: ${gasSuiTokens.toFixed(6)} SUI`);
+            
+            // 6. Serialize final transaction
+            const finalSerializedTx = await batchTx.build({ client: this.suiClient as any });
+            const transactionBytes = Buffer.from(finalSerializedTx).toString('base64');
+            
+            return {
+                costs: {
+                    coverBlob: { 
+                        wal: coverWalTokens, 
+                        mist: coverStorageCosts.totalCost.toString() 
+                    },
+                    contentBlob: { 
+                        wal: contentWalTokens, 
+                        mist: contentStorageCosts.totalCost.toString() 
+                    },
+                    totalGas: { 
+                        sui: gasSuiTokens, 
+                        mist: totalGasWithBuffer.toString() 
+                    },
+                    total: {
+                        walTokens: totalWalTokens,
+                        suiTokens: totalSuiTokens,
+                        walMist: (BigInt(coverStorageCosts.totalCost) + BigInt(contentStorageCosts.totalCost)).toString(),
+                        suiMist: totalGasWithBuffer.toString()
+                    }
+                },
+                transaction: transactionBytes,
+                metadata: {
+                    coverBlobId,
+                    contentBlobId,
+                    estimatedTime: '~30-60 seconds'
+                }
+            };
+            
+        } catch (error) {
+            this.logger.error('Failed to prepare batch upload:', error);
+            throw new Error(`Failed to prepare batch upload: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
+    }
 }

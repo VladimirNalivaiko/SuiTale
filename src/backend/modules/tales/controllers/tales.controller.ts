@@ -31,6 +31,7 @@ import { CreateTaleDto } from '../dto/create-tale.dto';
 import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
 import { RecordPublicationDto } from '../dto/record-publication.dto';
 import { PreparePublicationResultDto } from '../dto/prepare-publication-result.dto';
+import { BatchPublicationRequestDto, BatchPublicationResponseDto, RecordBatchPublicationDto } from '../dto/batch-publication.dto';
 import { WalrusService } from '../../walrus/services/walrus.service';
 
 // Create local interface to avoid the Multer namespace issue
@@ -135,6 +136,94 @@ export class TalesController {
                 error,
             );
             throw error; // Re-throw to be handled by NestJS default exception filter
+        }
+    }
+
+    @Post('prepare-batch-publication')
+    @UseInterceptors(FileInterceptor('coverImage'))
+    @ApiConsumes('multipart/form-data')
+    @ApiOperation({
+        summary: 'Prepare batch upload transaction for cover image and content',
+        description: 'Creates a single transaction to upload both cover image and content to Walrus, returning cost breakdown and serialized transaction for user to sign.'
+    })
+    @ApiResponse({
+        status: 201,
+        description: 'Batch publication prepared successfully',
+        type: BatchPublicationResponseDto,
+    })
+    @ApiResponse({
+        status: 400,
+        description: 'Invalid input or file validation failed',
+    })
+    async prepareBatchPublication(
+        @UploadedFile(
+            new ParseFilePipe({
+                validators: [
+                    new MaxFileSizeValidator({ maxSize: 5 * 1024 * 1024 }), // 5MB
+                    new FileTypeValidator({
+                        fileType: '^(image\\/(png|jpeg|jpg))$',
+                    }),
+                ],
+            }),
+        )
+        coverImage: MulterFile,
+        @Body() batchRequest: BatchPublicationRequestDto,
+    ): Promise<BatchPublicationResponseDto> {
+        console.log('[TalesController] prepareBatchPublication CALLED');
+        console.log('Cover image:', coverImage?.originalname, 'Size:', coverImage?.size);
+        console.log('Request:', JSON.stringify(batchRequest, null, 2));
+        
+        try {
+            // Validate that cover image buffer exists
+            if (!coverImage?.buffer) {
+                throw new Error('Cover image buffer is required');
+            }
+
+            // Call WalrusService directly for batch upload preparation
+            const result = await this.walrusService.prepareBatchUpload(
+                batchRequest.userAddress,
+                batchRequest.content,
+                coverImage.buffer
+            );
+            
+            return result;
+        } catch (error) {
+            console.error('[TalesController] Error in prepareBatchPublication:', error);
+            throw error;
+        }
+    }
+
+    @Post('record-batch-publication')
+    @ApiOperation({
+        summary: 'Record batch publication after user signs and executes the transaction',
+        description: 'Records the successful batch publication in the database with both cover and content blob IDs.'
+    })
+    @ApiResponse({
+        status: 201,
+        description: 'Batch publication recorded successfully',
+        type: TaleSummary,
+    })
+    @ApiResponse({
+        status: 400,
+        description: 'Invalid input or transaction verification failed',
+    })
+    @ApiResponse({
+        status: 422,
+        description: 'Sui transaction failed or was not successful',
+    })
+    @ApiBody({ type: RecordBatchPublicationDto })
+    async recordBatchPublication(
+        @Body() recordBatchDto: RecordBatchPublicationDto,
+    ): Promise<TaleSummary> {
+        console.log('[TalesController] recordBatchPublication CALLED');
+        console.log('Request:', JSON.stringify(recordBatchDto, null, 2));
+        
+        try {
+            // For now, delegate to TalesService - we'll implement this method next
+            return await this.talesService.recordBatchPublication(recordBatchDto);
+        } catch (error) {
+            console.error('[TalesController] Error in recordBatchPublication:', error);
+            throw error;
         }
     }
 

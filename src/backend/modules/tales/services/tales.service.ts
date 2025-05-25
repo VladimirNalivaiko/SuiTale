@@ -5,6 +5,7 @@ import { Tale } from '../schemas/tale.schema';
 import { CreateTaleDto } from '../dto/create-tale.dto';
 import { UpdateTaleDto } from '../dto/update-tale.dto';
 import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
+import { RecordBatchPublicationDto } from '../dto/batch-publication.dto';
 import { WalrusService } from '../../walrus/services/walrus.service';
 import { SuiService } from '../../sui/services/sui.service';
 import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
@@ -359,6 +360,70 @@ export class TalesService {
         const result = await this.taleModel.findByIdAndDelete(id).exec();
         if (!result) {
             throw new NotFoundException(`Tale with ID ${id} not found`);
+        }
+    }
+
+    /**
+     * Record batch publication after user successfully executes the batch transaction
+     * @param dto Data from batch publication including transaction digest and blob IDs
+     * @returns Created tale summary
+     */
+    async recordBatchPublication(dto: RecordBatchPublicationDto): Promise<TaleSummary> {
+        this.logger.log(`[TalesService] recordBatchPublication CALLED with txDigest: ${dto.suiTransactionDigest}`);
+        this.logger.debug('[TalesService] Batch publication data:', JSON.stringify(dto, null, 2));
+
+        try {
+            // 1. Verify transaction success on Sui
+            const txResponse = await this.suiService.suiClient.getTransactionBlock({
+                digest: dto.suiTransactionDigest,
+                options: { showEffects: true, showObjectChanges: true },
+            });
+
+            if (txResponse.effects?.status?.status !== 'success') {
+                this.logger.error(`[TalesService] Batch transaction ${dto.suiTransactionDigest} failed. Status: ${txResponse.effects?.status?.status}, Error: ${txResponse.effects?.status?.error}`);
+                throw new HttpException(
+                    `Sui batch transaction ${dto.suiTransactionDigest} failed: ${txResponse.effects?.status?.error || 'Unknown error'}`,
+                    HttpStatus.EXPECTATION_FAILED,
+                );
+            }
+
+            this.logger.log(`[TalesService] Batch transaction ${dto.suiTransactionDigest} was successful.`);
+
+            // 2. Build cover image URL from blob ID
+            const coverImageUrl = `https://aggregator.walrus-testnet.sui.io/v1/${dto.coverBlobId}`;
+
+            // 3. Create tale record with both blob IDs
+            const newTaleData = {
+                title: dto.title,
+                description: dto.description,
+                blobId: dto.contentBlobId, // Main content blob
+                coverImageUrl: coverImageUrl, // URL built from cover blob ID  
+                tags: dto.tags || [],
+                wordCount: dto.wordCount || 0,
+                readingTime: dto.readingTime || 1,
+                authorId: dto.userAddress,
+                suiTxDigest: dto.suiTransactionDigest,
+                // Note: We don't extract suiObjectId since batch upload only registers blobs,
+                // NFT creation will be a separate step in the future
+            };
+
+            this.logger.debug('[TalesService] Creating tale with data:', JSON.stringify(newTaleData, null, 2));
+
+            const createdTaleDoc = new this.taleModel(newTaleData);
+            const savedTaleDoc = await createdTaleDoc.save();
+            
+            this.logger.log(`[TalesService] Batch tale record saved to DB. ID: ${savedTaleDoc.id}`);
+            this.logger.log(`[TalesService] Cover Blob ID: ${dto.coverBlobId}, Content Blob ID: ${dto.contentBlobId}`);
+            
+            return this.mapToTaleSummary(savedTaleDoc);
+
+        } catch (error) {
+            if (error instanceof HttpException) throw error;
+            this.logger.error(`[TalesService] Error in recordBatchPublication for txDigest ${dto.suiTransactionDigest}:`, error.stack);
+            throw new HttpException(
+                `Failed to record batch publication for tx ${dto.suiTransactionDigest}: ${error.message}`,
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
         }
     }
 }
