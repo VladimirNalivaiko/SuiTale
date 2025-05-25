@@ -6,6 +6,17 @@ import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { MIST_PER_SUI, parseStructTag } from '@mysten/sui/utils';
 import { coinWithBalance, Transaction } from '@mysten/sui/transactions';
 import { TESTNET_WALRUS_PACKAGE_CONFIG } from '../../../constants';
+import { 
+    WalrusException,
+    BlobEncodingException,
+    StorageCostException,
+    TransactionBuildException,
+    DryRunException,
+    WalrusNetworkException,
+    InsufficientBalanceException,
+    BlobRetrievalException,
+    WalrusConfigurationException
+} from '../exceptions/walrus.exceptions';
 
 @Injectable()
 export class WalrusService {
@@ -620,21 +631,57 @@ export class WalrusService {
      * @returns Content as string
      */
     async getContent(blobId: string): Promise<string> {
+        if (!blobId || blobId.trim().length === 0) {
+            throw new BlobRetrievalException('', 'Blob ID cannot be empty', { blobId });
+        }
+
+        this.logger.log(`Fetching content with blob ID: ${blobId}`);
+
         try {
-            this.logger.log(`Fetching content with blob ID: ${blobId}`);
-
-            // Read blob from Walrus
-            const blobBytes = await this.walrusClient.readBlob({ blobId });
-
-            // Convert Uint8Array to string
-            const textDecoder = new TextDecoder('utf-8');
-            return textDecoder.decode(blobBytes);
-        } catch (error) {
-            this.logger.error(
-                `Failed to fetch content with blob ID ${blobId}:`,
-                error,
+            const blobBytes = await this.retryOperation(
+                async () => {
+                    return await this.walrusClient.readBlob({ blobId });
+                },
+                3,
+                `Content retrieval for blob ${blobId}`,
+                (error) => new BlobRetrievalException(
+                    blobId, 
+                    `Network error: ${error.message}`,
+                    { 
+                        operation: 'readBlob',
+                        networkStatus: 'unavailable'
+                    }
+                )
             );
-            throw new Error('Failed to fetch content from Walrus');
+
+            if (!blobBytes || blobBytes.length === 0) {
+                throw new BlobRetrievalException(blobId, 'Retrieved empty content', {
+                    retrievedSize: blobBytes?.length || 0
+                });
+            }
+
+            // Convert Uint8Array to string with proper error handling
+            try {
+                const textDecoder = new TextDecoder('utf-8');
+                const content = textDecoder.decode(blobBytes);
+                
+                this.logger.debug(`✅ Content retrieved successfully: ${content.length} characters`);
+                return content;
+            } catch (decodingError) {
+                throw new BlobRetrievalException(blobId, `Failed to decode content: ${decodingError.message}`, {
+                    blobSize: blobBytes.length,
+                    encoding: 'utf-8'
+                });
+            }
+        } catch (error) {
+            if (error instanceof WalrusException) {
+                throw error;
+            }
+            
+            this.logger.error(`❌ Failed to fetch content with blob ID ${blobId}:`, error);
+            throw new BlobRetrievalException(blobId, `Unexpected error: ${error.message}`, {
+                originalError: error.message
+            });
         }
     }
 
@@ -650,48 +697,69 @@ export class WalrusService {
         deletable = false,
         epochs = 3,
     ): Promise<{ blobId: string; url: string }> {
+        if (!fileBuffer || fileBuffer.length === 0) {
+            throw new BlobEncodingException('File buffer cannot be empty', {
+                bufferLength: fileBuffer?.length || 0
+            });
+        }
+
+        const maxFileSize = 100 * 1024 * 1024; // 100MB
+        if (fileBuffer.length > maxFileSize) {
+            throw new BlobEncodingException(`File too large: ${(fileBuffer.length / 1024 / 1024).toFixed(2)}MB (max: 100MB)`, {
+                actualSize: fileBuffer.length,
+                maxSize: maxFileSize
+            });
+        }
+
+        this.logger.log(`Walrus file upload started. Buffer length: ${fileBuffer.length}`);
+
         try {
-            this.logger.log(
-                `Walrus file upload started. Buffer length: ${fileBuffer.length}`,
-            );
             if (!this.keyPair) {
-                this.logger.warn(
-                    'Walrus keyPair not initialized yet, attempting to initialize...',
-                );
+                this.logger.warn('Walrus keyPair not initialized yet, attempting to initialize...');
                 this.keyPair = await this.getKeypair();
                 this.logger.log('Walrus keyPair initialized.');
             }
 
-            const { blobId } = await this.walrusClient.writeBlob({
-                signer: this.keyPair,
-                blob: fileBuffer,
-                deletable: deletable,
-                epochs: epochs,
-            });
-
-            // Get base URL from environment variable, with a fallback if not set
-            const publisherBaseUrl = this.configService.get<string>(
-                'WALRUS_PUBLISHER_BASE_URL',
+            const { blobId } = await this.retryOperation(
+                async () => {
+                    return await this.walrusClient.writeBlob({
+                        signer: this.keyPair,
+                        blob: fileBuffer,
+                        deletable: deletable,
+                        epochs: epochs,
+                    });
+                },
+                3,
+                'File upload to Walrus',
+                (error) => new WalrusNetworkException(`Failed to upload file: ${error.message}`, {
+                    fileSize: fileBuffer.length,
+                    epochs,
+                    deletable
+                })
             );
+
+            // Get base URL from environment variable
+            const publisherBaseUrl = this.configService.get<string>('WALRUS_PUBLISHER_BASE_URL');
             if (!publisherBaseUrl) {
-                this.logger.error(
-                    'WALRUS_PUBLISHER_BASE_URL is not set in environment variables.',
-                );
-                // Fallback or throw error - for now, let's log an error and potentially use a default or throw
-                // For robust behavior, you might want to throw an error here or have a default dev URL
-                throw new Error('WALRUS_PUBLISHER_BASE_URL is not configured.');
+                throw new WalrusConfigurationException('WALRUS_PUBLISHER_BASE_URL', {
+                    operation: 'uploadFileToWalrus'
+                });
             }
 
             const blobUrl = `${publisherBaseUrl.replace(/\/$/, '')}/${blobId}`;
-            this.logger.log(
-                `File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`,
-            );
+            this.logger.log(`✅ File uploaded to Walrus. Blob ID: ${blobId}, URL: ${blobUrl}`);
+            
             return { blobId, url: blobUrl };
         } catch (error) {
-            let message = 'Unknown Error';
-            if (error instanceof Error) message = error.message;
-            this.logger.error('Walrus file upload failed:', message, error);
-            throw error;
+            if (error instanceof WalrusException) {
+                throw error;
+            }
+            
+            this.logger.error('❌ Walrus file upload failed:', error);
+            throw new WalrusNetworkException(`Unexpected upload error: ${error.message}`, {
+                fileSize: fileBuffer.length,
+                originalError: error.message
+            });
         }
     }
 
@@ -727,100 +795,185 @@ export class WalrusService {
             estimatedTime: string;
         };
     }> {
+        const operation = title ? `"${title}"` : 'batch upload';
+        this.logger.log(`Starting batch upload preparation for ${operation}`);
+        
         try {
-            this.logger.log('Preparing batch upload for cover + content');
+            // Validate inputs
+            if (!userAddress) {
+                throw new TransactionBuildException('User address is required', { userAddress });
+            }
+            if (!content || content.trim().length === 0) {
+                throw new BlobEncodingException('Content cannot be empty', { contentLength: content?.length || 0 });
+            }
+            if (!coverImageBuffer || coverImageBuffer.length === 0) {
+                throw new BlobEncodingException('Cover image buffer cannot be empty', { bufferLength: coverImageBuffer?.length || 0 });
+            }
+
+            // Check file size limits
+            const maxCoverSize = 10 * 1024 * 1024; // 10MB
+            const maxContentSize = 50 * 1024 * 1024; // 50MB
             
-            // 1. Encode both blobs
+            if (coverImageBuffer.length > maxCoverSize) {
+                throw new BlobEncodingException(`Cover image too large: ${(coverImageBuffer.length / 1024 / 1024).toFixed(2)}MB (max: 10MB)`, {
+                    actualSize: coverImageBuffer.length,
+                    maxSize: maxCoverSize
+                });
+            }
+            
+            if (Buffer.byteLength(content, 'utf8') > maxContentSize) {
+                throw new BlobEncodingException(`Content too large: ${(Buffer.byteLength(content, 'utf8') / 1024 / 1024).toFixed(2)}MB (max: 50MB)`, {
+                    actualSize: Buffer.byteLength(content, 'utf8'),
+                    maxSize: maxContentSize
+                });
+            }
+            
+            // 1. Encode both blobs with retry logic
             this.logger.debug('Step 1: Encoding cover image blob...');
-            const { 
-                blobId: coverBlobId, 
-                metadata: coverMetadata,
-                rootHash: coverRootHash
-            } = await this.walrusClient.encodeBlob(new Uint8Array(coverImageBuffer));
+            const { coverBlobId, coverMetadata, coverRootHash } = await this.retryOperation(
+                async () => {
+                    const result = await this.walrusClient.encodeBlob(new Uint8Array(coverImageBuffer));
+                    return {
+                        coverBlobId: result.blobId,
+                        coverMetadata: result.metadata,
+                        coverRootHash: result.rootHash
+                    };
+                },
+                3,
+                'Cover image encoding',
+                (error) => new BlobEncodingException(`Failed to encode cover image: ${error.message}`, {
+                    bufferSize: coverImageBuffer.length,
+                    operation: 'encodeBlob',
+                    attempt: 'all retries exhausted'
+                })
+            );
             
             this.logger.debug('Step 2: Encoding content blob...');
             const contentBytes = new TextEncoder().encode(content);
-            const { 
-                blobId: contentBlobId, 
-                metadata: contentMetadata,
-                rootHash: contentRootHash
-            } = await this.walrusClient.encodeBlob(contentBytes);
+            const { contentBlobId, contentMetadata, contentRootHash } = await this.retryOperation(
+                async () => {
+                    const result = await this.walrusClient.encodeBlob(contentBytes);
+                    return {
+                        contentBlobId: result.blobId,
+                        contentMetadata: result.metadata,
+                        contentRootHash: result.rootHash
+                    };
+                },
+                3,
+                'Content encoding',
+                (error) => new BlobEncodingException(`Failed to encode content: ${error.message}`, {
+                    contentSize: contentBytes.length,
+                    operation: 'encodeBlob',
+                    attempt: 'all retries exhausted'
+                })
+            );
             
-            this.logger.debug(`Cover Blob ID: ${coverBlobId}, Content Blob ID: ${contentBlobId}`);
+            this.logger.debug(`✅ Blobs encoded - Cover: ${coverBlobId}, Content: ${contentBlobId}`);
             
             // 2. Calculate storage costs for both blobs
             const epochs = 5;
-            const coverUnencodedLength = parseInt(String(coverMetadata.V1.unencoded_length), 10);
-            const contentUnencodedLength = parseInt(String(contentMetadata.V1.unencoded_length), 10);
+            let coverUnencodedLength: number;
+            let contentUnencodedLength: number;
+            
+            try {
+                coverUnencodedLength = parseInt(String(coverMetadata.V1.unencoded_length), 10);
+                contentUnencodedLength = parseInt(String(contentMetadata.V1.unencoded_length), 10);
+                
+                if (isNaN(coverUnencodedLength) || isNaN(contentUnencodedLength)) {
+                    throw new Error('Invalid unencoded length values');
+                }
+            } catch (error) {
+                throw new BlobEncodingException('Failed to parse blob metadata', {
+                    coverMetadata: coverMetadata.V1,
+                    contentMetadata: contentMetadata.V1,
+                    error: error.message
+                });
+            }
             
             this.logger.debug('Step 3: Calculating storage costs...');
-            const coverStorageCosts = await this.walrusClient.storageCost(coverUnencodedLength, epochs);
-            const contentStorageCosts = await this.walrusClient.storageCost(contentUnencodedLength, epochs);
+            const { coverStorageCosts, contentStorageCosts } = await this.retryOperation(
+                async () => {
+                    const [cover, content] = await Promise.all([
+                        this.walrusClient.storageCost(coverUnencodedLength, epochs),
+                        this.walrusClient.storageCost(contentUnencodedLength, epochs)
+                    ]);
+                    return {
+                        coverStorageCosts: cover,
+                        contentStorageCosts: content
+                    };
+                },
+                3,
+                'Storage cost calculation',
+                (error) => new StorageCostException(`Failed to calculate storage costs: ${error.message}`, {
+                    coverSize: coverUnencodedLength,
+                    contentSize: contentUnencodedLength,
+                    epochs
+                })
+            );
             
-            // 3. Create batch transaction with both registerBlob operations
+            // 3. Create batch transaction
             this.logger.debug('Step 4: Creating batch transaction...');
+            const batchTx = await this.retryOperation(
+                async () => {
+                    const coverRegisterTx = await this.walrusClient.registerBlobTransaction({
+                        owner: userAddress,
+                        blobId: coverBlobId,
+                        rootHash: coverRootHash,
+                        size: coverUnencodedLength,
+                        deletable: false,
+                        epochs: epochs,
+                    });
+                    
+                    coverRegisterTx.setSender(userAddress);
+                    return coverRegisterTx;
+                },
+                2,
+                'Transaction creation',
+                (error) => new TransactionBuildException(`Failed to create batch transaction: ${error.message}`, {
+                    userAddress,
+                    coverBlobId,
+                    contentBlobId,
+                    operation: 'registerBlobTransaction'
+                })
+            );
             
-            // For now, let's try sequential approach to debug the issue
-            // Create cover register transaction
-            this.logger.debug('Creating cover register transaction...');
-            const coverRegisterTx = await this.walrusClient.registerBlobTransaction({
-                owner: userAddress,
-                blobId: coverBlobId,
-                rootHash: coverRootHash,
-                size: coverUnencodedLength,
-                deletable: false,
-                epochs: epochs,
-            });
-            
-            this.logger.debug('Cover register transaction created successfully');
-            
-            // For now, use just the cover transaction as batch transaction
-            const batchTx = coverRegisterTx;
-            batchTx.setSender(userAddress);
-            
-            // Add transaction description for wallet UI
             if (title) {
-                this.logger.debug(`Creating batch transaction for tale: "${title}"`);
-                // Note: Transaction description will be provided via frontend notifications
-                // Wallet will show the actual operations: register_blob, reserve_space, etc.
+                this.logger.debug(`✅ Batch transaction created for: "${title}"`);
             }
             
             // 4. Estimate gas costs via dry run
             this.logger.debug('Step 5: Estimating gas costs...');
-            const serializedBatchTx = await batchTx.build({ client: this.suiClient as any });
-            
-            // DEBUG: Log transaction details for wallet display analysis
-            this.logger.debug('=== TRANSACTION ANALYSIS FOR WALLET DISPLAY ===');
-            try {
-                const txData = batchTx.blockData;
-                this.logger.debug('Transaction inputs:', JSON.stringify(txData.inputs, null, 2));
-                this.logger.debug('Transaction commands:', JSON.stringify(txData.transactions, null, 2));
-                this.logger.debug('Transaction sender:', txData.sender);
-                this.logger.debug('Transaction version:', txData.version);
-            } catch (e) {
-                this.logger.debug('Could not analyze transaction blockData:', e);
-            }
-            this.logger.debug('=== END TRANSACTION ANALYSIS ===');
-            
-            const dryRunResult = await this.suiClient.dryRunTransactionBlock({
-                transactionBlock: serializedBatchTx,
-            });
-            
-            if (dryRunResult.effects.status.status !== 'success') {
-                this.logger.error('Dry run failed:', dryRunResult.effects.status.error);
-                throw new Error(`Dry run failed: ${dryRunResult.effects.status.error}`);
-            }
-            
-            // 5. Calculate costs in tokens
-            const totalGasRequired = BigInt(dryRunResult.effects.gasUsed.computationCost) + 
-                                   BigInt(dryRunResult.effects.gasUsed.storageCost);
-            const gasBuffer = totalGasRequired / 10n; // 10% buffer
-            const totalGasWithBuffer = totalGasRequired + gasBuffer;
+            const { dryRunResult, totalGasWithBuffer } = await this.retryOperation(
+                async () => {
+                    const serializedBatchTx = await batchTx.build({ client: this.suiClient as any });
+                    
+                    const dryRunResult = await this.suiClient.dryRunTransactionBlock({
+                        transactionBlock: serializedBatchTx,
+                    });
+                    
+                    if (dryRunResult.effects.status.status !== 'success') {
+                        throw new Error(`Dry run failed: ${dryRunResult.effects.status.error}`);
+                    }
+                    
+                    const totalGasRequired = BigInt(dryRunResult.effects.gasUsed.computationCost) + 
+                                           BigInt(dryRunResult.effects.gasUsed.storageCost);
+                    const gasBuffer = totalGasRequired / 10n; // 10% buffer
+                    const totalGasWithBuffer = totalGasRequired + gasBuffer;
+                    
+                    return { dryRunResult, totalGasWithBuffer };
+                },
+                2,
+                'Gas estimation',
+                (error) => new DryRunException(`Failed to estimate gas costs: ${error.message}`, {
+                    userAddress,
+                    operation: 'dryRunTransactionBlock'
+                })
+            );
             
             // Set gas budget
             batchTx.setGasBudget(Number(totalGasWithBuffer));
             
-            // Convert to token values
+            // 5. Calculate final costs in tokens
             const coverWalTokens = Number(coverStorageCosts.totalCost) / Number(MIST_PER_SUI);
             const contentWalTokens = Number(contentStorageCosts.totalCost) / Number(MIST_PER_SUI);
             const gasSuiTokens = Number(totalGasWithBuffer) / Number(MIST_PER_SUI);
@@ -828,13 +981,22 @@ export class WalrusService {
             const totalWalTokens = coverWalTokens + contentWalTokens;
             const totalSuiTokens = gasSuiTokens;
             
-            this.logger.log(`Batch costs calculated: Cover: ${coverWalTokens.toFixed(6)} WAL, Content: ${contentWalTokens.toFixed(6)} WAL, Gas: ${gasSuiTokens.toFixed(6)} SUI`);
+            this.logger.log(`✅ Batch costs calculated: Cover: ${coverWalTokens.toFixed(6)} WAL, Content: ${contentWalTokens.toFixed(6)} WAL, Gas: ${gasSuiTokens.toFixed(6)} SUI`);
             
             // 6. Serialize final transaction
-            const finalSerializedTx = await batchTx.build({ client: this.suiClient as any });
-            const transactionBytes = Buffer.from(finalSerializedTx).toString('base64');
+            const transactionBytes = await this.retryOperation(
+                async () => {
+                    const finalSerializedTx = await batchTx.build({ client: this.suiClient as any });
+                    return Buffer.from(finalSerializedTx).toString('base64');
+                },
+                2,
+                'Transaction serialization',
+                (error) => new TransactionBuildException(`Failed to serialize transaction: ${error.message}`, {
+                    operation: 'transaction.build'
+                })
+            );
             
-            return {
+            const result = {
                 costs: {
                     coverBlob: { 
                         wal: coverWalTokens, 
@@ -859,13 +1021,87 @@ export class WalrusService {
                 metadata: {
                     coverBlobId,
                     contentBlobId,
-                    estimatedTime: '~30-60 seconds'
+                    estimatedTime: this.estimateTransactionTime(totalWalTokens, totalSuiTokens)
                 }
             };
             
+            this.logger.log(`✅ Batch upload preparation completed for ${operation}`);
+            return result;
+            
         } catch (error) {
-            this.logger.error('Failed to prepare batch upload:', error);
-            throw new Error(`Failed to prepare batch upload: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            // Enhanced error logging and re-throwing
+            if (error instanceof WalrusException) {
+                this.logger.error(`❌ Batch upload preparation failed for ${operation}:`, {
+                    type: error.name,
+                    message: error.message,
+                    context: error.context,
+                    status: error.getStatus()
+                });
+                throw error;
+            }
+            
+            this.logger.error(`❌ Unexpected error in batch upload preparation for ${operation}:`, {
+                error: error.message,
+                stack: error.stack,
+                type: error.constructor.name
+            });
+            
+            throw new WalrusException(`Failed to prepare batch upload: ${error.message}`, undefined, {
+                operation: 'prepareBatchUpload',
+                title,
+                originalError: error.message
+            });
+        }
+    }
+
+    /**
+     * Retry operation with exponential backoff
+     */
+    private async retryOperation<T>(
+        operation: () => Promise<T>,
+        maxRetries: number,
+        operationName: string,
+        errorFactory: (error: Error) => WalrusException
+    ): Promise<T> {
+        let lastError: Error;
+        
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                const result = await operation();
+                if (attempt > 1) {
+                    this.logger.log(`✅ ${operationName} succeeded on attempt ${attempt}`);
+                }
+                return result;
+            } catch (error) {
+                lastError = error as Error;
+                this.logger.warn(`⚠️ ${operationName} failed on attempt ${attempt}/${maxRetries}: ${error.message}`);
+                
+                if (attempt < maxRetries) {
+                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000); // Max 5s delay
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+        
+        throw errorFactory(lastError!);
+    }
+
+    /**
+     * Estimate transaction completion time based on costs
+     */
+    private estimateTransactionTime(walTokens: number, suiTokens: number): string {
+        // Base time estimation logic
+        const baseTime = 30; // seconds
+        const walComplexity = Math.min(walTokens * 10, 30); // Max 30s for WAL operations
+        const suiComplexity = Math.min(suiTokens * 5, 15); // Max 15s for SUI operations
+        
+        const estimatedSeconds = baseTime + walComplexity + suiComplexity;
+        
+        if (estimatedSeconds < 60) {
+            return `~${Math.round(estimatedSeconds)} seconds`;
+        } else {
+            const minutes = Math.round(estimatedSeconds / 60);
+            return `~${minutes} minute${minutes > 1 ? 's' : ''}`;
         }
     }
 }
