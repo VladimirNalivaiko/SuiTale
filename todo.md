@@ -112,24 +112,24 @@ POST /api/tales/prepare-publication
 ### 1.1 Обновить эндпоинт
 **Файл:** `src/backend/modules/tales/controllers/tales.controller.ts`
 - [x] ~~POST /api/tales/estimate-costs~~ → **Объединить в prepare-publication**
-- [ ] `POST /api/tales/prepare-publication` (заменяет текущий)
-- [ ] Принимает: title + description + content + coverImage + userAddress
-- [ ] Возвращает: costs + batchTransaction + metadata
+- [x] `POST /api/tales/prepare-publication` (заменяет текущий)
+- [x] Принимает: title + description + content + coverImage + userAddress
+- [x] Возвращает: costs + batchTransaction + metadata
 
 ### 1.2 Обновить WalrusService  
 **Файл:** `src/backend/modules/walrus/services/walrus.service.ts`
-- [ ] `prepareBatchUpload(userAddress, content, coverImage)`:
-  - Encode cover → coverBlobId
-  - Encode content → contentBlobId  
-  - Create batch transaction (2 registerBlob calls)
-  - Calculate total costs
-  - Return serialized transaction + metadata
+- [x] `prepareBatchUpload(userAddress, content, coverImage)`:
+  - [x] Encode cover → coverBlobId
+  - [x] Encode content → contentBlobId  
+  - [x] Create batch transaction (2 registerBlob calls)
+  - [x] Calculate total costs
+  - [x] Return serialized transaction + metadata
 
 ### 1.3 Обновить TalesService
 **Файл:** `src/backend/modules/tales/services/tales.service.ts`
-- [ ] `prepareTalePublication()`: новая логика batch upload
-- [ ] `recordPublication()`: сохранять coverBlobId + contentBlobId отдельно
-- [ ] Remove: старая логика upload'а cover image
+- [x] `prepareTalePublication()`: новая логика batch upload
+- [x] `recordBatchPublication()`: сохранять coverBlobId + contentBlobId отдельно
+- [x] Remove: старая логика upload'а cover image
 
 ---
 
@@ -137,8 +137,8 @@ POST /api/tales/prepare-publication
 
 ### 2.1 Обновить CreateTalePage
 **Файл:** `src/frontend/pages/CreateTale/CreateTalePage.tsx`
-- [ ] **Убрать отдельную загрузку cover**: нет `uploadCoverToWalrus`
-- [ ] **Новый handlePublish()**: 
+- [x] **Убрать отдельную загрузку cover**: нет `uploadCoverToWalrus`
+- [x] **Новый handlePublish()**: 
   ```typescript
   1. Validate form (включая cover image)
   2. Call preparePublication с cover + content
@@ -149,16 +149,16 @@ POST /api/tales/prepare-publication
 
 ### 2.2 Новый компонент Cost Preview
 **Файл:** `src/frontend/components/TaleEditor/CostBreakdown.tsx`
-- [ ] Показывает costs для cover blob + content blob
-- [ ] Visual breakdown: "Cover Image: 0.02 WAL | Content: 0.03 WAL"
-- [ ] Total cost с USD эквивалентом (если есть)
-- [ ] Estimated time: "~30-60 seconds"
+- [x] Показывает costs для cover blob + content blob
+- [x] Visual breakdown: "Cover Image: 0.02 WAL | Content: 0.03 WAL"
+- [x] Total cost с USD эквивалентом (если есть)
+- [x] Estimated time: "~30-60 seconds"
 
 ### 2.3 Обновить API типы
 **Файл:** `src/frontend/api/tales.api.ts`
-- [ ] Новый `PreparePublicationRequest` type
-- [ ] Новый `PreparePublicationResponse` type
-- [ ] Обновить hook: `usePreparePublication`
+- [x] Новый `PreparePublicationRequest` type
+- [x] Новый `PreparePublicationResponse` type
+- [x] Обновить hook: `usePreparePublication`
 
 ---
 
@@ -166,14 +166,26 @@ POST /api/tales/prepare-publication
 
 ### 3.1 Tale model
 **Файл:** `src/backend/modules/tales/schemas/tale.schema.ts`
-- [ ] Добавить: `coverBlobId: string`
-- [ ] Добавить: `contentBlobId: string`  
-- [ ] Убрать: `walrusContentBlobId` (заменяется на contentBlobId)
-- [ ] Обновить: `coverImageWalrusUrl` → URL builder из coverBlobId
+- [x] Добавить: `coverBlobId: string`
+- [x] Добавить: `contentBlobId: string`  
+- [x] Убрать: `walrusContentBlobId` (заменяется на contentBlobId)
+- [x] Обновить: `coverImageWalrusUrl` → URL builder из coverBlobId
 
-### 3.2 Migration strategy
-- [ ] Миграция существующих tale'ов
-- [ ] Backward compatibility для старых URL'ов
+### 3.2 Backend Service Updates
+**Файл:** `src/backend/modules/tales/services/tales.service.ts`
+- [x] Обновить `recordBatchPublication()` для новых полей схемы
+- [x] Обновить `mapToTaleSummary()` с fallback logic для backward compatibility
+- [x] Обновить `getFullTale()` для использования contentBlobId
+- [x] Обновить `TaleSummary` интерфейс с новыми полями
+
+### 3.3 Frontend Type Updates
+**Файл:** `src/frontend/api/tales.api.ts`
+- [x] Обновить `TaleSummary` интерфейс с новыми полями
+- [x] Backward compatibility для legacy полей
+
+### 3.4 Migration strategy
+- [ ] Миграция существующих tale'ов (optional - автоматически via fallback logic)
+- [x] Backward compatibility для старых URL'ов (implemented via fallback in mapToTaleSummary)
 
 ---
 

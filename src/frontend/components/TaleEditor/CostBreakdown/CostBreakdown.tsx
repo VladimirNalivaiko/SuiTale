@@ -13,6 +13,8 @@ import {
   DialogActions,
   Divider,
   LinearProgress,
+  useTheme,
+  alpha,
 } from '@mui/material';
 import {
   AccountBalance as WalrusIcon,
@@ -59,6 +61,8 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
   isLoading = false,
   isConfirming = false,
 }) => {
+  const theme = useTheme();
+
   if (!costData && !isLoading) {
     return null;
   }
@@ -72,12 +76,13 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
       PaperProps={{
         sx: {
           borderRadius: 2,
-          background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)',
+          backgroundColor: theme.palette.background.paper,
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.12)}`,
         }
       }}
     >
       <DialogTitle sx={{ pb: 1 }}>
-        <Typography variant="h5" component="h2" fontWeight="bold">
+        <Typography variant="h6" component="div" fontWeight="bold">
           📊 Publication Cost Breakdown
         </Typography>
         <Typography variant="body2" color="text.secondary">
@@ -96,7 +101,11 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
         ) : costData ? (
           <Box>
             {/* Storage Costs */}
-            <Card sx={{ mb: 2, background: 'rgba(255,255,255,0.8)' }}>
+            <Card sx={{ 
+              mb: 2, 
+              backgroundColor: alpha(theme.palette.background.default, 0.6),
+              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+            }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <WalrusIcon color="primary" />
@@ -138,7 +147,11 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
             </Card>
 
             {/* Gas Costs */}
-            <Card sx={{ mb: 2, background: 'rgba(255,255,255,0.8)' }}>
+            <Card sx={{ 
+              mb: 2, 
+              backgroundColor: alpha(theme.palette.background.default, 0.6),
+              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`
+            }}>
               <CardContent>
                 <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <GasIcon color="secondary" />
@@ -161,27 +174,32 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
             </Card>
 
             {/* Total */}
-            <Card sx={{ mb: 2, background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', color: 'white' }}>
+            <Card sx={{ 
+              mb: 2, 
+              backgroundColor: theme.palette.primary.main,
+              color: theme.palette.primary.contrastText,
+              border: `1px solid ${alpha(theme.palette.primary.dark, 0.3)}`
+            }}>
               <CardContent>
-                <Typography variant="h6" gutterBottom fontWeight="bold">
+                <Typography variant="h6" gutterBottom fontWeight="bold" color="inherit">
                   💰 Total Cost
                 </Typography>
                 
                 <Grid container spacing={2}>
                   <Grid item xs={6}>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    <Typography variant="body2" sx={{ color: alpha(theme.palette.primary.contrastText, 0.9) }}>
                       Storage (WAL)
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold">
+                    <Typography variant="h6" fontWeight="bold" color="inherit">
                       {formatTokens(costData.costs.total.walTokens, 'WAL')}
                     </Typography>
                   </Grid>
                   
                   <Grid item xs={6}>
-                    <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                    <Typography variant="body2" sx={{ color: alpha(theme.palette.primary.contrastText, 0.9) }}>
                       Gas (SUI)
                     </Typography>
-                    <Typography variant="h6" fontWeight="bold">
+                    <Typography variant="h6" fontWeight="bold" color="inherit">
                       {formatTokens(costData.costs.total.suiTokens, 'SUI')}
                     </Typography>
                   </Grid>
@@ -213,9 +231,9 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
 
             <Box sx={{ 
               p: 2, 
-              backgroundColor: 'rgba(76, 175, 80, 0.1)', 
+              backgroundColor: alpha(theme.palette.success.main, 0.1), 
               borderRadius: 1,
-              border: '1px solid rgba(76, 175, 80, 0.3)'
+              border: `1px solid ${alpha(theme.palette.success.main, 0.3)}`
             }}>
               <Typography variant="body2" color="success.main" fontWeight="medium" gutterBottom>
                 ✅ Benefits of Batch Upload:
@@ -243,9 +261,8 @@ export const CostBreakdown: React.FC<CostBreakdownProps> = ({
           onClick={onConfirm}
           disabled={isLoading || isConfirming || !costData}
           variant="contained"
+          color="primary"
           sx={{
-            background: 'linear-gradient(45deg, #667eea 30%, #764ba2 90%)',
-            color: 'white',
             fontWeight: 'bold',
             minWidth: 120,
           }}

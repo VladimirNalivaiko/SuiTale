@@ -6,7 +6,9 @@ import {
     IsArray,
     MaxLength,
     Matches,
+    IsNumber,
 } from 'class-validator';
+import { Transform, Type } from 'class-transformer';
 
 export class BatchPublicationRequestDto {
     @ApiProperty({
@@ -42,6 +44,20 @@ export class BatchPublicationRequestDto {
     @IsArray()
     @IsString({ each: true })
     @IsOptional()
+    @Transform(({ value }) => {
+        // Handle FormData arrays: tags[0], tags[1], etc. -> [value1, value2]
+        if (Array.isArray(value)) return value;
+        // Handle single tag or JSON string
+        if (typeof value === 'string') {
+            try {
+                const parsed = JSON.parse(value);
+                return Array.isArray(parsed) ? parsed : [value];
+            } catch {
+                return [value];
+            }
+        }
+        return [];
+    })
     tags?: string[];
 
     @ApiProperty({
@@ -49,6 +65,11 @@ export class BatchPublicationRequestDto {
         example: 1500,
     })
     @IsOptional()
+    @IsNumber()
+    @Transform(({ value }) => {
+        if (typeof value === 'string') return parseInt(value, 10);
+        return value;
+    })
     wordCount?: number;
 
     @ApiProperty({
@@ -56,6 +77,11 @@ export class BatchPublicationRequestDto {
         example: 5,
     })
     @IsOptional()
+    @IsNumber()
+    @Transform(({ value }) => {
+        if (typeof value === 'string') return parseInt(value, 10);
+        return value;
+    })
     readingTime?: number;
 
     @ApiProperty({ 

@@ -27,6 +27,8 @@ export class TaleSummary {
   updatedAt: string;
   suiTxDigest?: string;
   suiObjectId?: string;
+  coverImageBlobId?: string;
+  coverImageWalrusUrl?: string;
 }
 
 interface TaleWithContent extends TaleSummary {
@@ -62,8 +64,8 @@ export class TalesService {
             id: taleDoc.id,
             title: taleDoc.title,
             description: taleDoc.description,
-            contentBlobId: taleDoc.blobId,
-            coverImageUrl: taleDoc.coverImageUrl,
+            contentBlobId: taleDoc.contentBlobId || taleDoc.blobId, // Prefer new field, fallback to legacy
+            coverImageUrl: taleDoc.coverImageWalrusUrl || taleDoc.coverImageUrl, // Prefer Walrus URL, fallback to legacy
             tags: taleDoc.tags,
             wordCount: taleDoc.wordCount,
             readingTime: taleDoc.readingTime,
@@ -72,6 +74,9 @@ export class TalesService {
             updatedAt: taleDoc.updatedAt.toISOString(),
             suiTxDigest: taleDoc.suiTxDigest,
             suiObjectId: taleDoc.suiObjectId,
+            // Include new fields for API consumers
+            coverImageBlobId: taleDoc.coverImageBlobId,
+            coverImageWalrusUrl: taleDoc.coverImageWalrusUrl,
         };
     }
 
@@ -318,17 +323,19 @@ export class TalesService {
             throw new NotFoundException(`Tale with ID ${id} not found`);
         }
 
-        if (!taleDoc.blobId) {
-            this.logger.error(`[TalesService] Tale with ID ${id} has no blobId for content.`);
-            throw new NotFoundException(`Content blobId not found for Tale with ID ${id}`);
+        // Use new contentBlobId field, fallback to legacy blobId
+        const contentBlobId = taleDoc.contentBlobId || taleDoc.blobId;
+        if (!contentBlobId) {
+            this.logger.error(`[TalesService] Tale with ID ${id} has no contentBlobId or blobId for content.`);
+            throw new NotFoundException(`Content blob ID not found for Tale with ID ${id}`);
         }
 
         let content = '';
         try {
-            content = await this.walrusService.getContent(taleDoc.blobId);
-            this.logger.debug(`[TalesService] Content fetched from Walrus for blobId: ${taleDoc.blobId}`);
+            content = await this.walrusService.getContent(contentBlobId);
+            this.logger.debug(`[TalesService] Content fetched from Walrus for contentBlobId: ${contentBlobId}`);
         } catch (error) {
-            this.logger.error(`[TalesService] Failed to fetch content from Walrus for blobId ${taleDoc.blobId}:`, error.stack);
+            this.logger.error(`[TalesService] Failed to fetch content from Walrus for contentBlobId ${contentBlobId}:`, error.stack);
             content = "Error fetching content from Walrus."; 
         }
         
@@ -390,20 +397,24 @@ export class TalesService {
             this.logger.log(`[TalesService] Batch transaction ${dto.suiTransactionDigest} was successful.`);
 
             // 2. Build cover image URL from blob ID
-            const coverImageUrl = `https://aggregator.walrus-testnet.sui.io/v1/${dto.coverBlobId}`;
+            const publisherBaseUrl = process.env.WALRUS_PUBLISHER_BASE_URL || 'https://aggregator.walrus-testnet.sui.io/v1';
+            const coverImageWalrusUrl = `${publisherBaseUrl}/${dto.coverBlobId}`;
 
-            // 3. Create tale record with both blob IDs
+            // 3. Create tale record with both blob IDs (new schema approach)
             const newTaleData = {
                 title: dto.title,
                 description: dto.description,
-                blobId: dto.contentBlobId, // Main content blob
-                coverImageUrl: coverImageUrl, // URL built from cover blob ID  
+                blobId: dto.contentBlobId, // Legacy field - points to content blob for backward compatibility
+                contentBlobId: dto.contentBlobId, // NEW: Explicit content blob ID
+                coverImageBlobId: dto.coverBlobId, // NEW: Explicit cover blob ID  
+                coverImageWalrusUrl: coverImageWalrusUrl, // NEW: Built from cover blob ID
+                coverImageUrl: coverImageWalrusUrl, // Legacy field for backward compatibility
                 tags: dto.tags || [],
                 wordCount: dto.wordCount || 0,
                 readingTime: dto.readingTime || 1,
                 authorId: dto.userAddress,
                 suiTxDigest: dto.suiTransactionDigest,
-                // Note: We don't extract suiObjectId since batch upload only registers blobs,
+                // Note: No suiObjectId since batch upload only registers blobs,
                 // NFT creation will be a separate step in the future
             };
 

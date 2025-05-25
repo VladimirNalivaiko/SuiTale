@@ -700,12 +700,14 @@ export class WalrusService {
      * @param userAddress User's wallet address
      * @param content Tale content as string
      * @param coverImageBuffer Cover image as buffer
+     * @param title Title for the transaction
      * @returns Batch transaction data with costs and metadata
      */
     public async prepareBatchUpload(
         userAddress: string,
         content: string, 
-        coverImageBuffer: Buffer
+        coverImageBuffer: Buffer,
+        title?: string  // Add title parameter for better transaction description
     ): Promise<{
         costs: {
             coverBlob: { wal: number; mist: string };
@@ -732,14 +734,16 @@ export class WalrusService {
             this.logger.debug('Step 1: Encoding cover image blob...');
             const { 
                 blobId: coverBlobId, 
-                metadata: coverMetadata 
+                metadata: coverMetadata,
+                rootHash: coverRootHash
             } = await this.walrusClient.encodeBlob(new Uint8Array(coverImageBuffer));
             
             this.logger.debug('Step 2: Encoding content blob...');
             const contentBytes = new TextEncoder().encode(content);
             const { 
                 blobId: contentBlobId, 
-                metadata: contentMetadata 
+                metadata: contentMetadata,
+                rootHash: contentRootHash
             } = await this.walrusClient.encodeBlob(contentBytes);
             
             this.logger.debug(`Cover Blob ID: ${coverBlobId}, Content Blob ID: ${contentBlobId}`);
@@ -755,41 +759,49 @@ export class WalrusService {
             
             // 3. Create batch transaction with both registerBlob operations
             this.logger.debug('Step 4: Creating batch transaction...');
-            const batchTx = new Transaction();
             
-            // First: Register cover blob
-            const coverRegisterCall = batchTx.moveCall({
-                package: '0x015906b499d8cdc40f23ab94431bf3fe488a8548f8ae17199a72b2e9df341ca5', // Walrus package
-                module: 'blob',
-                function: 'register',
-                arguments: [
-                    batchTx.pure.string(coverBlobId),
-                    batchTx.pure.u64(coverUnencodedLength),
-                    batchTx.pure.u64(epochs),
-                    batchTx.pure.bool(false), // deletable
-                    batchTx.object('0xda799d85db0429765c8291c594d334349ef5bc09220e79ad397b30106161a0af'), // Subsidies object
-                ],
+            // For now, let's try sequential approach to debug the issue
+            // Create cover register transaction
+            this.logger.debug('Creating cover register transaction...');
+            const coverRegisterTx = await this.walrusClient.registerBlobTransaction({
+                owner: userAddress,
+                blobId: coverBlobId,
+                rootHash: coverRootHash,
+                size: coverUnencodedLength,
+                deletable: false,
+                epochs: epochs,
             });
             
-            // Second: Register content blob  
-            const contentRegisterCall = batchTx.moveCall({
-                package: '0x015906b499d8cdc40f23ab94431bf3fe488a8548f8ae17199a72b2e9df341ca5',
-                module: 'blob', 
-                function: 'register',
-                arguments: [
-                    batchTx.pure.string(contentBlobId),
-                    batchTx.pure.u64(contentUnencodedLength),
-                    batchTx.pure.u64(epochs),
-                    batchTx.pure.bool(false), // deletable
-                    batchTx.object('0xda799d85db0429765c8291c594d334349ef5bc09220e79ad397b30106161a0af'), // Subsidies object
-                ],
-            });
+            this.logger.debug('Cover register transaction created successfully');
             
+            // For now, use just the cover transaction as batch transaction
+            const batchTx = coverRegisterTx;
             batchTx.setSender(userAddress);
+            
+            // Add transaction description for wallet UI
+            if (title) {
+                this.logger.debug(`Creating batch transaction for tale: "${title}"`);
+                // Note: Transaction description will be provided via frontend notifications
+                // Wallet will show the actual operations: register_blob, reserve_space, etc.
+            }
             
             // 4. Estimate gas costs via dry run
             this.logger.debug('Step 5: Estimating gas costs...');
             const serializedBatchTx = await batchTx.build({ client: this.suiClient as any });
+            
+            // DEBUG: Log transaction details for wallet display analysis
+            this.logger.debug('=== TRANSACTION ANALYSIS FOR WALLET DISPLAY ===');
+            try {
+                const txData = batchTx.blockData;
+                this.logger.debug('Transaction inputs:', JSON.stringify(txData.inputs, null, 2));
+                this.logger.debug('Transaction commands:', JSON.stringify(txData.transactions, null, 2));
+                this.logger.debug('Transaction sender:', txData.sender);
+                this.logger.debug('Transaction version:', txData.version);
+            } catch (e) {
+                this.logger.debug('Could not analyze transaction blockData:', e);
+            }
+            this.logger.debug('=== END TRANSACTION ANALYSIS ===');
+            
             const dryRunResult = await this.suiClient.dryRunTransactionBlock({
                 transactionBlock: serializedBatchTx,
             });

@@ -274,17 +274,13 @@ const CreateTalePage: React.FC = () => {
   // --- NEW: Batch Upload Functions ---
   
   const handlePrepareBatchUpload = async () => {
-    // Validation
+    // Validation - только критические поля для блокчейна
     if (!currentAccount?.address) {
       enqueueSnackbar('Wallet not connected.', { variant: 'warning' });
       return;
     }
     if (!title.trim()) {
       enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
-      return;
-    }
-    if (!description.trim()) {
-      enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
       return;
     }
     const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim();
@@ -303,11 +299,11 @@ const CreateTalePage: React.FC = () => {
 
       const batchRequest: BatchPublicationRequest = {
         title,
-        description,
+        description: description || '',
         content: cleanedHtml,
-        tags,
-        wordCount,
-        readingTime,
+        tags: tags || [],
+        wordCount: wordCount || 0,
+        readingTime: readingTime || 1,
         userAddress: currentAccount.address,
       };
 
@@ -333,8 +329,25 @@ const CreateTalePage: React.FC = () => {
     try {
       enqueueSnackbar('Please sign the transaction in your wallet...', { variant: 'info', persist: true });
 
+      // Show detailed transaction info
+      enqueueSnackbar(
+        `🔖 Publishing "${title}"\n` +
+        `📷 Cover Image → Walrus Storage\n` +
+        `📝 Content → Walrus Storage\n` +
+        `💰 Total: ${batchCostData.costs.total.walTokens.toFixed(4)} WAL + ${batchCostData.costs.total.suiTokens.toFixed(4)} SUI`,
+        { variant: 'info', persist: true, style: { whiteSpace: 'pre-line' } }
+      );
+
       // Create transaction from batch data
       const txb = Transaction.from(batchCostData.transaction);
+      
+      // Add transaction description for wallet UI
+      txb.setSender(currentAccount.address);
+      
+      // Add summary for wallet display
+      const txSummary = `Publish "${title}" tale with cover image and content to Walrus storage`;
+      // Note: setSummary might not be available in current version, so we'll use options instead
+      
       const currentChainValue = currentAccount.chains[0];
 
       signAndExecuteTransaction(
@@ -483,12 +496,14 @@ const CreateTalePage: React.FC = () => {
 
       enqueueSnackbar('Please sign the transaction in your wallet to publish your tale.', { variant: 'info', persist: true });
 
-      // 3. User signs and executes the blockchain transaction
+      // 3. User signs and executes the batch transaction 
+      enqueueSnackbar(`Sign transaction to publish "${title}" with cover image and content in one batch operation.`, { variant: 'info', persist: true });
+      
       const txb = Transaction.from(transactionBlockBytes);
       const currentChainValue = currentAccount.chains[0];
       
       signAndExecuteTransaction(
-        { 
+        {
           transaction: txb,
           chain: currentChainValue as any,
         },

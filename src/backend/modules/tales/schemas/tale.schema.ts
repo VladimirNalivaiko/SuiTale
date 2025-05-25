@@ -34,24 +34,41 @@ export class Tale extends Document {
 
     @Prop({ required: true })
     @ApiProperty({
-        description: 'Walrus network content identifier (BlobId)',
+        description: 'Walrus network content identifier (BlobId) - for content blob',
         example: 'lr-oIvxVti7-ZSvG-4u81GOsWBmaOqBeeD1PiU8mBA4',
     })
     blobId: string = '';
 
     @Prop()
     @ApiProperty({
-        description: 'Base64 encoded cover image or URL',
+        description: 'Base64 encoded cover image or URL (legacy)',
         required: false,
     })
     coverImageUrl?: string;
 
     @Prop()
     @ApiProperty({
-        description: 'Walrus network cover image identifier (BlobId)',
+        description: 'Walrus network cover image identifier (BlobId) - for cover blob',
         required: false,
+        example: 'abc123xyz-cover-blob-id-example',
     })
     coverImageBlobId?: string;
+
+    @Prop()
+    @ApiProperty({
+        description: 'Walrus network content blob identifier (BlobId) - separate from cover',
+        required: false,
+        example: 'def456uvw-content-blob-id-example',
+    })
+    contentBlobId?: string;
+
+    @Prop()
+    @ApiProperty({
+        description: 'Walrus URL for cover image (built from coverImageBlobId)',
+        required: false,
+        example: 'https://agg.test.walrus.eosusa.io/blob/abc123xyz-cover-blob-id',
+    })
+    coverImageWalrusUrl?: string;
 
     @Prop()
     @ApiProperty({

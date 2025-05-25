@@ -183,7 +183,8 @@ export class TalesController {
             const result = await this.walrusService.prepareBatchUpload(
                 batchRequest.userAddress,
                 batchRequest.content,
-                coverImage.buffer
+                coverImage.buffer,
+                batchRequest.title  // Pass title for wallet transaction description
             );
             
             return result;

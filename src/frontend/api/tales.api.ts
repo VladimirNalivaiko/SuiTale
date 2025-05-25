@@ -8,7 +8,9 @@ export interface TaleSummary {
   id: string;
   title: string;
   description: string;
-  coverImageUrl?: string; // Stores the full URL from Walrus publisher
+  coverImageUrl?: string; // Legacy field - Stores the full URL (backward compatibility)
+  coverImageBlobId?: string; // NEW: Cover image blob ID in Walrus
+  coverImageWalrusUrl?: string; // NEW: Built Walrus URL for cover image
   contentBlobId: string; // Stores the Blob ID for the main content in Walrus
   tags: string[];
   wordCount: number;
@@ -16,6 +18,8 @@ export interface TaleSummary {
   authorId?: string; // Or a more detailed Author object if you have one
   createdAt: string;
   updatedAt: string;
+  suiTxDigest?: string;
+  suiObjectId?: string;
 }
 
 // Interface for detailed Tale view, including content from Walrus
@@ -251,8 +255,10 @@ export const talesApi = {
     formData.append('content', data.content);
     formData.append('userAddress', data.userAddress);
     
-    if (data.tags) {
-      formData.append('tags', JSON.stringify(data.tags));
+    if (data.tags && data.tags.length > 0) {
+      data.tags.forEach((tag, index) => {
+        formData.append(`tags[${index}]`, tag);
+      });
     }
     if (data.wordCount !== undefined) {
       formData.append('wordCount', data.wordCount.toString());
