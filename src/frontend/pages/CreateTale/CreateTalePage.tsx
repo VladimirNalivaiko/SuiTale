@@ -16,7 +16,8 @@ import {
   EditorHeader,
   SlashTip,
   SlashCommandsMenu,
-  SlashCommands
+  SlashCommands,
+  CostBreakdown
 } from '../../components/TaleEditor';
 import 'tippy.js/dist/tippy.css';
 import { 
@@ -28,12 +29,20 @@ import {
 } from '../../styles/TaleEditor.styles';
 import { 
   usePreparePublication,
-  useRecordPublication
+  useRecordPublication,
+  usePrepareBatchPublication,
+  useRecordBatchPublication
 } from '../../hooks/useTales';
 import { useUploadCoverToWalrus } from '../../hooks/useFiles';
 import { useSnackbar } from 'notistack';
 import { useSignPersonalMessage, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { FrontendInitiatePublicationDto, PreparePublicationResultDto, RecordPublicationDto } from '../../api/tales.api';
+import { 
+  FrontendInitiatePublicationDto, 
+  PreparePublicationResultDto, 
+  RecordPublicationDto,
+  BatchPublicationRequest,
+  BatchPublicationResponse 
+} from '../../api/tales.api';
 import { Transaction } from '@mysten/sui/transactions';
 import { Buffer } from 'buffer';
 
@@ -85,6 +94,11 @@ const CreateTalePage: React.FC = () => {
   const [mintCapacity, setMintCapacity] = useState<string>('100');
   const [royaltyFeeBps, setRoyaltyFeeBps] = useState<number>(500); // 5%
 
+  // --- NEW: Batch Upload State ---
+  const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
+  const [batchCostData, setBatchCostData] = useState<BatchPublicationResponse | null>(null);
+  const [useBatchUpload, setUseBatchUpload] = useState<boolean>(true); // Toggle for batch vs legacy
+
   // React Query hooks & Dapp-kit hooks
   const { mutateAsync: uploadCoverToWalrus, isPending: isUploadingCover } = useUploadCoverToWalrus();
   const { enqueueSnackbar } = useSnackbar();
@@ -92,6 +106,10 @@ const CreateTalePage: React.FC = () => {
   const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
   const { mutateAsync: preparePublicationMutate, isPending: isPreparingPublication } = usePreparePublication();
   const { mutateAsync: recordPublicationMutate, isPending: isRecordingPublication } = useRecordPublication();
+
+  // --- NEW: Batch Upload Hooks ---
+  const { mutateAsync: prepareBatchPublicationMutate, isPending: isPreparingBatch } = usePrepareBatchPublication();
+  const { mutateAsync: recordBatchPublicationMutate, isPending: isRecordingBatch } = useRecordBatchPublication();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -251,6 +269,136 @@ const CreateTalePage: React.FC = () => {
   // Update tags
   const handleTagsChange = (newTags: string[]) => {
     setTags(newTags);
+  };
+
+  // --- NEW: Batch Upload Functions ---
+  
+  const handlePrepareBatchUpload = async () => {
+    // Validation
+    if (!currentAccount?.address) {
+      enqueueSnackbar('Wallet not connected.', { variant: 'warning' });
+      return;
+    }
+    if (!title.trim()) {
+      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
+      return;
+    }
+    if (!description.trim()) {
+      enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
+      return;
+    }
+    const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim();
+    if (!cleanedHtml || cleanedHtml === '<p></p>') {
+      enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
+      return;
+    }
+    if (!coverImageFile) {
+      enqueueSnackbar('Please select a cover image.', { variant: 'error' });
+      return;
+    }
+
+    try {
+      setBatchCostData(null);
+      setShowCostBreakdown(true);
+
+      const batchRequest: BatchPublicationRequest = {
+        title,
+        description,
+        content: cleanedHtml,
+        tags,
+        wordCount,
+        readingTime,
+        userAddress: currentAccount.address,
+      };
+
+      const result = await prepareBatchPublicationMutate({
+        coverImage: coverImageFile,
+        data: batchRequest,
+      });
+
+      setBatchCostData(result);
+      enqueueSnackbar('Cost estimate ready! Review and confirm to publish.', { variant: 'success' });
+    } catch (error: any) {
+      console.error('[CreateTalePage] Error preparing batch upload:', error);
+      enqueueSnackbar(`Failed to calculate costs: ${error.message}`, { variant: 'error' });
+      setShowCostBreakdown(false);
+    }
+  };
+
+  const handleConfirmBatchUpload = async () => {
+    if (!batchCostData || !currentAccount?.address) {
+      return;
+    }
+
+    try {
+      enqueueSnackbar('Please sign the transaction in your wallet...', { variant: 'info', persist: true });
+
+      // Create transaction from batch data
+      const txb = Transaction.from(batchCostData.transaction);
+      const currentChainValue = currentAccount.chains[0];
+
+      signAndExecuteTransaction(
+        {
+          transaction: txb,
+          chain: currentChainValue as any,
+        },
+        {
+          onSuccess: async (result: { digest: string; [key: string]: any }) => {
+            enqueueSnackbar('Transaction successful! Recording publication...', { variant: 'info' });
+
+            try {
+              // Record batch publication
+              const recordPayload = {
+                suiTransactionDigest: result.digest,
+                coverBlobId: batchCostData.metadata.coverBlobId,
+                contentBlobId: batchCostData.metadata.contentBlobId,
+                title,
+                description,
+                tags,
+                wordCount,
+                readingTime,
+                userAddress: currentAccount.address,
+              };
+
+              const finalTale = await recordBatchPublicationMutate(recordPayload);
+
+              enqueueSnackbar(`Tale "${finalTale.title}" published successfully!`, { variant: 'success' });
+
+              // Clear form and close dialog
+              setShowCostBreakdown(false);
+              setBatchCostData(null);
+              
+              // Clear localStorage and form
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+              localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+              
+              editor?.commands.setContent('');
+              setTitle('');
+              setDescription('');
+              setCoverImageWalrusUrl('');
+              setCoverPreviewUrl('');
+              setTags([]);
+              setCoverImageFile(null);
+              
+            } catch (recordError: any) {
+              console.error('[CreateTalePage] Error recording batch publication:', recordError);
+              enqueueSnackbar(`Publication recorded on blockchain but database update failed: ${recordError.message}. Digest: ${result.digest}`, 
+                { variant: 'warning', persist: true });
+            }
+          },
+          onError: (error: Error | any) => {
+            console.error('[CreateTalePage] Error signing batch transaction:', error);
+            enqueueSnackbar(`Transaction failed: ${error.message}`, { variant: 'error' });
+          }
+        }
+      );
+    } catch (error: any) {
+      console.error('[CreateTalePage] Error in batch upload confirmation:', error);
+      enqueueSnackbar(`Publication error: ${error.message}`, { variant: 'error' });
+    }
   };
 
   const handlePublish = async () => {
@@ -438,14 +586,14 @@ const CreateTalePage: React.FC = () => {
   return (
     <Box sx={editorContainerStyles as SxProps<Theme>}>
       <EditorHeader 
-        isSaving={isPublishing || isUploadingCover}
+        isSaving={isPublishing || isUploadingCover || isPreparingBatch}
         isUploadingCover={isUploadingCover}
         lastSaved={lastSaved}
         onTogglePreview={togglePreview}
         wordCount={wordCount}
         readingTime={readingTime}
         onToggleMetadata={toggleMetadata}
-        onSave={handlePublish}
+        onSave={useBatchUpload ? handlePrepareBatchUpload : handlePublish}
       />
       
       <Box sx={{ 
@@ -513,6 +661,15 @@ const CreateTalePage: React.FC = () => {
         tags={tags}
         wordCount={wordCount}
         readingTime={readingTime}
+      />
+
+      <CostBreakdown
+        open={showCostBreakdown}
+        onClose={() => setShowCostBreakdown(false)}
+        onConfirm={handleConfirmBatchUpload}
+        costData={batchCostData}
+        isLoading={isPreparingBatch}
+        isConfirming={isRecordingBatch}
       />
     </Box>
   );
