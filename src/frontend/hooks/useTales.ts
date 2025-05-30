@@ -13,7 +13,10 @@ import {
   UpdateTalePayload,
   FrontendInitiatePublicationDto,
   PreparePublicationResultDto,
-  RecordPublicationDto
+  RecordPublicationDto,
+  BatchPublicationRequest,
+  BatchPublicationResponse,
+  RecordBatchPublicationRequest
 } from '../api/tales.api';
 
 // Query keys
@@ -140,6 +143,38 @@ export const useDeleteTale = () => {
     onSuccess: (_, id) => {
       queryClient.removeQueries({ queryKey: taleKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
+    },
+  });
+};
+
+// --- NEW: Batch Publication Hooks ---
+
+/**
+ * Hook for preparing batch publication (cover + content in one transaction)
+ */
+export const usePrepareBatchPublication = () => {
+  return useMutation<
+    BatchPublicationResponse, 
+    Error, 
+    { coverImage: File; data: BatchPublicationRequest }
+  >({
+    mutationFn: ({ coverImage, data }) => talesApi.prepareBatchPublication(coverImage, data),
+  });
+};
+
+/**
+ * Hook for recording batch publication after user signs transaction
+ */
+export const useRecordBatchPublication = () => {
+  const queryClient = useQueryClient();
+  
+  return useMutation<TaleSummary, Error, RecordBatchPublicationRequest>({
+    mutationFn: (payload: RecordBatchPublicationRequest) => talesApi.recordBatchPublication(payload),
+    onSuccess: (newTale) => {
+      // Invalidate tales list to refetch
+      queryClient.invalidateQueries({ queryKey: taleKeys.lists() });
+      // Update cache for the newly created tale
+      queryClient.setQueryData(taleKeys.detail(newTale.id), newTale);
     },
   });
 };

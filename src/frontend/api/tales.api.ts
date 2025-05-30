@@ -1,4 +1,4 @@
-// Базовый URL API
+// Base API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 // --- Updated Tale Interfaces ---
@@ -8,7 +8,9 @@ export interface TaleSummary {
   id: string;
   title: string;
   description: string;
-  coverImageUrl?: string; // Stores the full URL from Walrus publisher
+  coverImageUrl?: string; // Legacy field - Stores the full URL (backward compatibility)
+  coverImageBlobId?: string; // NEW: Cover image blob ID in Walrus
+  coverImageWalrusUrl?: string; // NEW: Built Walrus URL for cover image
   contentBlobId: string; // Stores the Blob ID for the main content in Walrus
   tags: string[];
   wordCount: number;
@@ -16,6 +18,8 @@ export interface TaleSummary {
   authorId?: string; // Or a more detailed Author object if you have one
   createdAt: string;
   updatedAt: string;
+  suiTxDigest?: string;
+  suiObjectId?: string;
 }
 
 // Interface for detailed Tale view, including content from Walrus
@@ -72,14 +76,15 @@ export interface FrontendInitiatePublicationDto {
 export interface TaleDataForRecord {
   title: string;
   description: string;
-  contentBlobId: string; 
-  coverImageWalrusUrl: string;
+  contentBlobId: string; // Restored from blobId - for main content
+  coverBlobId: string; // Added separate field for cover blob ID
+  coverImageUrl?: string; // Keep as optional Walrus URL
   tags: string[];
   wordCount: number;
   readingTime: number;
-  authorAddress: string;
-  mintPrice: number; // MIST
-  mintCapacity: number;
+  authorId: string; // Changed from authorAddress to match backend
+  mintPrice: number; // MIST as number
+  mintCapacity: number; // As number
   royaltyFeeBps: number;
 }
 
@@ -91,6 +96,50 @@ export interface PreparePublicationResultDto {
 export interface RecordPublicationDto {
   txDigest: string;
   taleDataForRecord: TaleDataForRecord;
+}
+
+// --- NEW: Batch Publication Types ---
+
+export interface BatchPublicationRequest {
+  title: string;
+  description: string;
+  content: string;
+  tags?: string[];
+  wordCount?: number;
+  readingTime?: number;
+  userAddress: string;
+}
+
+export interface BatchPublicationResponse {
+  costs: {
+    coverBlob: { wal: number; mist: string };
+    contentBlob: { wal: number; mist: string };
+    totalGas: { sui: number; mist: string };
+    total: {
+      walTokens: number;
+      suiTokens: number;
+      walMist: string;
+      suiMist: string;
+    };
+  };
+  transaction: string; // serialized batch transaction
+  metadata: {
+    coverBlobId: string;
+    contentBlobId: string;
+    estimatedTime: string;
+  };
+}
+
+export interface RecordBatchPublicationRequest {
+  suiTransactionDigest: string;
+  coverBlobId: string;
+  contentBlobId: string;
+  title: string;
+  description: string;
+  tags?: string[];
+  wordCount?: number;
+  readingTime?: number;
+  userAddress: string;
 }
 
 // API functions
@@ -190,6 +239,65 @@ export const talesApi = {
       console.error('Upload cover image failed:', errorData);
       throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
     }
+    return await response.json();
+  },
+
+  // --- NEW: Batch Publication API ---
+
+  // Prepare batch publication with cover image + content
+  async prepareBatchPublication(
+    coverImage: File,
+    data: BatchPublicationRequest
+  ): Promise<BatchPublicationResponse> {
+    const formData = new FormData();
+    formData.append('coverImage', coverImage);
+    formData.append('title', data.title);
+    formData.append('description', data.description);
+    formData.append('content', data.content);
+    formData.append('userAddress', data.userAddress);
+    
+    if (data.tags && data.tags.length > 0) {
+      data.tags.forEach((tag, index) => {
+        formData.append(`tags[${index}]`, tag);
+      });
+    }
+    if (data.wordCount !== undefined) {
+      formData.append('wordCount', data.wordCount.toString());
+    }
+    if (data.readingTime !== undefined) {
+      formData.append('readingTime', data.readingTime.toString());
+    }
+
+    const response = await fetch(`${API_BASE_URL}/tales/prepare-batch-publication`, {
+      method: 'POST',
+      body: formData,
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        message: `API error: ${response.status} ${response.statusText}` 
+      }));
+      throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
+    }
+    
+    return await response.json();
+  },
+
+  // Record batch publication after user signs transaction
+  async recordBatchPublication(payload: RecordBatchPublicationRequest): Promise<TaleSummary> {
+    const response = await fetch(`${API_BASE_URL}/tales/record-batch-publication`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        message: `API error: ${response.status} ${response.statusText}` 
+      }));
+      throw new Error(errorData.message || `API error: ${response.status} ${response.statusText}`);
+    }
+    
     return await response.json();
   },
 }; 

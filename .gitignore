@@ -142,3 +142,7 @@ dist
 .DS_Store
 
 /Docs
+
+todo.md
+
+.cursor

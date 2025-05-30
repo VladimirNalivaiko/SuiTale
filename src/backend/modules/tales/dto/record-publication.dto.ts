@@ -13,10 +13,15 @@ class TaleDataForRecordDto {
     @IsString()
     description: string;
 
-    @ApiProperty({ description: 'Walrus blob ID for the main content', example: 'blobId123' })
+    @ApiProperty({ description: 'Walrus blob ID for the main content', example: 'contentBlobId123' })
     @IsString()
     @IsNotEmpty()
-    blobId: string;
+    contentBlobId: string;
+
+    @ApiProperty({ description: 'Walrus blob ID for the cover image', example: 'coverBlobId456' })
+    @IsString()
+    @IsNotEmpty()
+    coverBlobId: string;
 
     @ApiProperty({ description: 'URL of the cover image (potentially from Walrus)', example: 'http://.../cover.jpg', required: false })
     @IsString()

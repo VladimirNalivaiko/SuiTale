@@ -1,27 +1,27 @@
 import React from 'react';
 import { Box, Container, Typography, Grid, useTheme } from '@mui/material';
 
-// Предполагаемые пути к иконкам. Тебе нужно будет их заменить на актуальные.
-const SuiLogoLight = '../../../assets/svg/companies/sui-light.svg'; // Пример для светлой темы
-const SuiLogoDark = '../../../assets/svg/companies/sui-dark.svg';   // Пример для темной темы
+// Assumed paths to icons. You will need to replace them with actual ones.
+const SuiLogoLight = '../../../assets/svg/companies/sui-light.svg'; // Example for light theme
+const SuiLogoDark = '../../../assets/svg/companies/sui-dark.svg';   // Example for dark theme
 const WalrusLogoLight = '../../../assets/svg/companies/walrus-light.svg';
 const WalrusLogoDark = '../../../assets/svg/companies/walrus-dark.svg';
 
-// Обновленная структура для логотипов компаний
+// Updated structure for company logos
 const companyLogos = [
   { 
     id: 1, 
     name: 'Sui', 
-    logoUrlLight: SuiLogoLight, // Используй текущий SuiLogo как light версию
-    logoUrlDark: SuiLogoDark    // Сюда добавишь путь к темной версии Sui лого
+    logoUrlLight: SuiLogoLight, // Use current SuiLogo as light version
+    logoUrlDark: SuiLogoDark    // Add path to dark version of Sui logo here
   },
   { 
     id: 2, 
     name: 'Walrus', 
-    logoUrlLight: WalrusLogoLight, // Используй текущий WalrusLogo как light версию
-    logoUrlDark: WalrusLogoDark     // Сюда добавишь путь к темной версии Walrus лого
+    logoUrlLight: WalrusLogoLight, // Use current WalrusLogo as light version
+    logoUrlDark: WalrusLogoDark     // Add path to dark version of Walrus logo here
   },
-  // Добавляй другие компании по аналогии
+  // Add other companies following the same pattern
 ];
 
 export const TrustedBy: React.FC = () => {

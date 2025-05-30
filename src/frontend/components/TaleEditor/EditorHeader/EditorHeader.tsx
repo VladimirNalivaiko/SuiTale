@@ -10,12 +10,12 @@ import LogoutIcon from '@mui/icons-material/Logout';
 import { generatePath, useNavigate } from 'react-router-dom';
 import { ROUTES } from '../../../types/constants';
 
-// Импортируем необходимые хуки и компонент ConnectModal
+// Import necessary hooks and ConnectModal component
 import {
-    ConnectModal, // Компонент модального окна
+    ConnectModal, // Modal window component
     useCurrentAccount,
     useDisconnectWallet,
-    // useConnectWallet и useWallets пока не используем, но они есть
+    // useConnectWallet and useWallets are not used yet, but they exist
 } from '@mysten/dapp-kit';
 
 interface EditorHeaderProps {

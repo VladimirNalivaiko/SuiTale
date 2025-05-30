@@ -24,7 +24,7 @@ export async function uploadTale(
         });
 
         console.log('Blob ID:', blobId);
-        console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
+        console.log('URL:', `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`);
         return blobId;
     } catch (error) {
         let message = 'Unknown Error';
@@ -57,7 +57,7 @@ export async function storeContentOnWalrus(content: string): Promise<string> {
         });
 
         console.log('Content stored with Blob ID:', blobId);
-        console.log('URL:', `https://cache.testnet.walrus.xyz/blob/${blobId}`);
+        console.log('URL:', `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`);
         return blobId;
     } catch (error) {
         let message = 'Unknown Error';

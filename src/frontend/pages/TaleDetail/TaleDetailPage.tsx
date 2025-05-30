@@ -1,6 +1,6 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Box, CircularProgress, Container, Typography, Alert, Button, Paper, Chip, Skeleton, Grid } from '@mui/material';
+  import { Box, CircularProgress, Container, Typography, Alert, Button, Paper, Chip, Skeleton, Grid } from '@mui/material';
 import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { DefaultLayout } from '../../layouts';
 import { useTaleWithContent } from '../../hooks/useTales';

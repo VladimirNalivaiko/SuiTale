@@ -50,9 +50,9 @@ export class InitiatePublicationDto {
         type: [String],
         example: ['Blockchain', 'Sui'],
     })
+    @IsOptional() // Make tags optional in case frontend sends empty array or nothing
     @IsArray()
     @IsString({ each: true })
-    @IsOptional() // Сделаем теги опциональными на случай если фронт может прислать пустой массив или ничего
     tags?: string[];
 
     @ApiProperty({

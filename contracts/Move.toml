@@ -3,20 +3,22 @@ name = "suitale"
 version = "0.1.0"
 
 [dependencies]
-# Раскомментируем зависимости для чистой сборки
+# Uncomment dependencies for clean build
 Sui = { git = "https://github.com/MystenLabs/sui.git", subdir = "crates/sui-framework/packages/sui-framework", rev = "testnet" }
 
 [addresses]
-# Указываем НОВЫЙ Package ID, полученный при успешной публикации "mypackagetest123"
-suitale = "0xe77ddf0aa8937e0f1f6ca4bba3c9b3e039aebc447f17a45fdcd27b9de0d5e5b4"
+# Address for new deployment
+suitale = "0x0"
 # mypackagetest123 = "0x0"
 # When upgrading, the package name here should resolve to its actual published ID.
 # suitale_testpublish = "0x0"
 # suitale = "0x902dfbd9e3d673af9d9b59c32c96eafa19a4f4bdf4a60c5cde0d15c94a621b2c"
 
-# Закомментированные строки ниже были удалены, так как они не являются частью стандартного Move.toml
-# и вызывали ошибки парсинга ранее.
-# # Если вы хотите сохранить UPGRADE_CAP_OBJECT_ID и команду как заметку, сделайте так:
+# The commented lines below have been removed as they are not part of standard Move.toml
+# and were causing parsing errors previously.
+# # If you want to keep UPGRADE_CAP_OBJECT_ID and command as a note, do this:
 # # UPGRADE_CAP_OBJECT_ID = 0xb344a2857da0f2e2285d9e09aac67687f03d94127da5a1b9df928c5e0fc3afba
-# # Команда для апгрейда:
+# # Upgrade command:
 # # sui client upgrade --gas-budget 200000000 --upgrade-capability 0xb344a2857da0f2e2285d9e09aac67687f03d94127da5a1b9df928c5e0fc3afba ./contracts/build/suitale
+
+# UpgradeCap ID for upgrades: 0x995b959f8202ce19b26f7e041bb544df3a67ad85df06aadb6146ce10290260b0
