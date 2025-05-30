@@ -9,7 +9,6 @@ import MetadataToggle from './MetadataToggle';
 import PreviewDialog from './PreviewDialog';
 import EditorHeader from './EditorHeader';
 import SlashTip from './SlashTip';
-import { CostBreakdown } from './CostBreakdown';
 
 export {
   NodeMenu,
@@ -23,5 +22,4 @@ export {
   PreviewDialog,
   EditorHeader,
   SlashTip,
-  CostBreakdown,
 };

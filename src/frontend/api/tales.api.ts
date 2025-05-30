@@ -1,4 +1,4 @@
-// Базовый URL API
+// Base API URL
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
 
 // --- Updated Tale Interfaces ---
@@ -76,14 +76,15 @@ export interface FrontendInitiatePublicationDto {
 export interface TaleDataForRecord {
   title: string;
   description: string;
-  contentBlobId: string; 
-  coverImageWalrusUrl: string;
+  contentBlobId: string; // Restored from blobId - for main content
+  coverBlobId: string; // Added separate field for cover blob ID
+  coverImageUrl?: string; // Keep as optional Walrus URL
   tags: string[];
   wordCount: number;
   readingTime: number;
-  authorAddress: string;
-  mintPrice: number; // MIST
-  mintCapacity: number;
+  authorId: string; // Changed from authorAddress to match backend
+  mintPrice: number; // MIST as number
+  mintCapacity: number; // As number
   royaltyFeeBps: number;
 }
 

@@ -1,7 +1,7 @@
 import React, { createContext, useState, useMemo, useContext, useEffect, ReactNode } from 'react';
 import { ThemeProvider as MuiThemeProvider, Theme } from '@mui/material/styles';
 import { CssBaseline } from '@mui/material';
-import { getAppTheme } from '../styles/theme'; // Путь к вашей функции getAppTheme
+import { getAppTheme } from '../styles/theme'; // Path to your getAppTheme function
 
 type ThemeMode = 'light' | 'dark';
 
@@ -19,13 +19,13 @@ interface AppThemeProviderProps {
 
 export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({ children }) => {
   const [mode, setMode] = useState<ThemeMode>(() => {
-    // Получаем сохраненный режим из localStorage или используем 'light' по умолчанию
+    // Get saved mode from localStorage or use 'light' as default
     const storedMode = localStorage.getItem('themeMode') as ThemeMode | null;
     return storedMode || 'light';
   });
 
   useEffect(() => {
-    // Сохраняем режим в localStorage при его изменении
+    // Save mode to localStorage when it changes
     localStorage.setItem('themeMode', mode);
   }, [mode]);
 
@@ -44,7 +44,7 @@ export const AppThemeProvider: React.FC<AppThemeProviderProps> = ({ children }) 
   return (
     <ThemeContext.Provider value={contextValue}>
       <MuiThemeProvider theme={theme}>
-        <CssBaseline /> {/* Нормализует стили и применяет фон темы к body */}
+        <CssBaseline /> {/* Normalizes styles and applies theme background to body */}
         {children}
       </MuiThemeProvider>
     </ThemeContext.Provider>

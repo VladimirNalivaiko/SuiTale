@@ -262,7 +262,17 @@ export class TalesService {
             }
 
             const newTaleData = {
-                ...taleDataForRecord,
+                title: taleDataForRecord.title,
+                description: taleDataForRecord.description,
+                blobId: taleDataForRecord.contentBlobId, // Required field - use contentBlobId as main blob ID
+                contentBlobId: taleDataForRecord.contentBlobId, // Explicit content blob ID
+                coverImageBlobId: taleDataForRecord.coverBlobId, // Explicit cover blob ID
+                coverImageWalrusUrl: taleDataForRecord.coverImageUrl, // Walrus URL for cover
+                coverImageUrl: taleDataForRecord.coverImageUrl, // Legacy field for backward compatibility
+                tags: taleDataForRecord.tags || [],
+                wordCount: taleDataForRecord.wordCount || 0,
+                readingTime: taleDataForRecord.readingTime || 1,
+                authorId: taleDataForRecord.authorId,
                 suiTxDigest: txDigest,
                 suiObjectId: suiObjectId, // May be undefined if not found
             };
@@ -396,8 +406,8 @@ export class TalesService {
 
             this.logger.log(`[TalesService] Batch transaction ${dto.suiTransactionDigest} was successful.`);
 
-            // 2. Build cover image URL from blob ID
-            const publisherBaseUrl = process.env.WALRUS_PUBLISHER_BASE_URL || 'https://aggregator.walrus-testnet.sui.io/v1';
+            // 2. Build cover image URL from blob ID (using working aggregator URL)
+            const publisherBaseUrl = process.env.WALRUS_PUBLISHER_BASE_URL || 'https://aggregator.walrus-testnet.walrus.space/v1/blobs';
             const coverImageWalrusUrl = `${publisherBaseUrl}/${dto.coverBlobId}`;
 
             // 3. Create tale record with both blob IDs (new schema approach)

@@ -27,11 +27,6 @@ export class WalrusService {
 
     constructor(private configService: ConfigService) {
         // Initialize Sui client
-        // const rpcUrl = this.configService.get<string>(
-        //     'SUI_RPC_URL',
-        //     'https://fullnode.testnet.sui.io:443',
-        // );
-
         this.suiClient = new SuiClient({
             url: getFullnodeUrl('testnet'),
         });
@@ -73,7 +68,7 @@ export class WalrusService {
         }
 
         const keypair = Ed25519Keypair.fromSecretKey(privateKey);
-        console.log('Sui Address:', keypair.toSuiAddress());
+        this.logger.log('Sui Address:', keypair.toSuiAddress());
 
         // Check SUI balance first
         const suiBalance = await this.suiClient.getBalance({
@@ -81,14 +76,14 @@ export class WalrusService {
             coinType: '0x2::sui::SUI',
         });
         const suiTokens = Number(suiBalance.totalBalance) / Number(MIST_PER_SUI);
-        console.log(`SUI balance: ${suiBalance.totalBalance} MIST (${suiTokens.toFixed(6)} SUI)`);
+        this.logger.log(`SUI balance: ${suiBalance.totalBalance} MIST (${suiTokens.toFixed(6)} SUI)`);
 
         const walBalance = await this.suiClient.getBalance({
             owner: keypair.toSuiAddress(),
             coinType: `0x8270feb7375eee355e64fdb69c50abb6b5f9393a722883c1cf45f8e26048810a::wal::WAL`,
         });
         const walTokens = Number(walBalance.totalBalance) / Number(MIST_PER_SUI);
-        console.log(`WAL balance: ${walBalance.totalBalance} MIST (${walTokens.toFixed(6)} WAL)`);
+        this.logger.log(`WAL balance: ${walBalance.totalBalance} MIST (${walTokens.toFixed(6)} WAL)`);
 
         // Required SUI for gas (let's keep 0.2 SUI minimum for operations)
         const requiredSuiBalance = MIST_PER_SUI / 5n; // 0.2 SUI
@@ -137,7 +132,7 @@ export class WalrusService {
                 options: { showEffects: true },
             });
 
-            console.log('WAL->SUI Exchange result:', result.effects);
+            this.logger.log('WAL->SUI Exchange result:', result.effects);
             
             // Check new balances
             const newSuiBalance = await this.suiClient.getBalance({
@@ -145,7 +140,7 @@ export class WalrusService {
                 coinType: '0x2::sui::SUI',
             });
             const newSuiTokens = Number(newSuiBalance.totalBalance) / Number(MIST_PER_SUI);
-            console.log(`New SUI balance after exchange: ${newSuiBalance.totalBalance} MIST (${newSuiTokens.toFixed(6)} SUI)`);
+            this.logger.log(`New SUI balance after exchange: ${newSuiBalance.totalBalance} MIST (${newSuiTokens.toFixed(6)} SUI)`);
         }
 
         // Check WAL balance and exchange SUI for WAL if needed (for storage costs)
@@ -182,7 +177,7 @@ export class WalrusService {
                 options: { showEffects: true },
             });
 
-            console.log('SUI->WAL Exchange result:', result.effects);
+            this.logger.log('SUI->WAL Exchange result:', result.effects);
         }
 
         return keypair;
@@ -579,13 +574,13 @@ export class WalrusService {
             }
 
             this.logger.log(`Walrus uploadTale finished successfully. Blob ID: ${blobId}`);
-            console.log('Blob ID:', blobId); // Old log, can be kept or removed
+            
             const publisherBaseUrl = this.configService.get<string>(
                 'WALRUS_PUBLISHER_BASE_URL',
                 'https://agg.test.walrus.eosusa.io'
             );
             const blobUrl = `${publisherBaseUrl.replace(/\/$/, '')}/blob/${blobId}`;
-            console.log('URL:', blobUrl); // Old log
+            this.logger.debug(`Blob URL: ${blobUrl}`);
             
             // Test blob accessibility
             try {
@@ -620,7 +615,7 @@ export class WalrusService {
                  this.logger.error('Caught non-Error object (low-level):', error);
             }
             this.logger.error('Walrus uploadTale (low-level) failed:', message);
-            console.error('Upload failed (low-level):', message, error);
+            this.logger.error('Upload failed (low-level):', message, error);
             throw error;
         }
     }

@@ -16,9 +16,9 @@ import {
   EditorHeader,
   SlashTip,
   SlashCommandsMenu,
-  SlashCommands,
-  CostBreakdown
+  SlashCommands
 } from '../../components/TaleEditor';
+import { CostEstimationModal } from '../../components/CostEstimationModal';
 import 'tippy.js/dist/tippy.css';
 import { 
   editorContainerStyles, 
@@ -28,23 +28,15 @@ import {
   tipTapEditorStyles
 } from '../../styles/TaleEditor.styles';
 import { 
-  usePreparePublication,
-  useRecordPublication,
-  usePrepareBatchPublication,
-  useRecordBatchPublication
-} from '../../hooks/useTales';
-import { useUploadCoverToWalrus } from '../../hooks/useFiles';
+  useEstimateWalrusUploadCost,
+  useWalrusUpload
+} from '../../hooks/useWalrusUpload';
+import { useCreateTaleNFT } from '../../hooks/useCreateTaleNFT';
 import { useSnackbar } from 'notistack';
-import { useSignPersonalMessage, useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
-import { 
-  FrontendInitiatePublicationDto, 
-  PreparePublicationResultDto, 
-  RecordPublicationDto,
-  BatchPublicationRequest,
-  BatchPublicationResponse 
-} from '../../api/tales.api';
+import { useCurrentAccount, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
-import { Buffer } from 'buffer';
+import { talesApi } from '../../api/tales.api';
+import { walrusService } from '../../services/walrus.service';
 
 // Local storage keys
 const LOCAL_STORAGE_KEYS = {
@@ -56,7 +48,7 @@ const LOCAL_STORAGE_KEYS = {
   TAGS: 'tale-editor-tags'
 };
 
-// Popular tags for autocpmplete
+// Popular tags for autocomplete
 const SUGGESTED_TAGS = [
   'Fiction', 'Non-Fiction', 'Tutorial', 'Technology', 'Programming', 
   'Web Development', 'Design', 'UX', 'React', 'JavaScript', 
@@ -70,6 +62,14 @@ const READING_SPEED = 200;
 
 const CreateTalePage: React.FC = () => {
   const currentAccount = useCurrentAccount();
+  const { mutateAsync: signAndExecuteTransaction } = useSignAndExecuteTransaction();
+  
+  // Helper function to format digest/blob ID for display
+  const formatDigest = (digest: string): string => {
+    if (digest.length <= 12) return digest;
+    return `${digest.slice(0, 6)}...${digest.slice(-6)}`;
+  };
+  
   const [title, setTitle] = useState<string>('');
   const [isPublishing, setIsPublishing] = useState<boolean>(false);
   
@@ -89,27 +89,23 @@ const CreateTalePage: React.FC = () => {
   const [wordCount, setWordCount] = useState<number>(0);
   const [readingTime, setReadingTime] = useState<number>(0);
 
-  // Minting details (example values, can be form inputs)
+  // Minting details
   const [mintPrice, setMintPrice] = useState<string>('100000000'); // 0.1 SUI in MIST
   const [mintCapacity, setMintCapacity] = useState<string>('100');
   const [royaltyFeeBps, setRoyaltyFeeBps] = useState<number>(500); // 5%
 
-  // --- NEW: Batch Upload State ---
-  const [showCostBreakdown, setShowCostBreakdown] = useState<boolean>(false);
-  const [batchCostData, setBatchCostData] = useState<BatchPublicationResponse | null>(null);
-  const [useBatchUpload, setUseBatchUpload] = useState<boolean>(true); // Toggle for batch vs legacy
+  // CLIENT-SIDE WALRUS STATE
+  const [showCostEstimation, setShowCostEstimation] = useState<boolean>(false);
+  const [clientSideCostData, setClientSideCostData] = useState<any>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ step: string; progress: number } | null>(null);
 
   // React Query hooks & Dapp-kit hooks
-  const { mutateAsync: uploadCoverToWalrus, isPending: isUploadingCover } = useUploadCoverToWalrus();
   const { enqueueSnackbar } = useSnackbar();
-  const { mutateAsync: signPersonalMessage } = useSignPersonalMessage();
-  const { mutate: signAndExecuteTransaction } = useSignAndExecuteTransaction();
-  const { mutateAsync: preparePublicationMutate, isPending: isPreparingPublication } = usePreparePublication();
-  const { mutateAsync: recordPublicationMutate, isPending: isRecordingPublication } = useRecordPublication();
 
-  // --- NEW: Batch Upload Hooks ---
-  const { mutateAsync: prepareBatchPublicationMutate, isPending: isPreparingBatch } = usePrepareBatchPublication();
-  const { mutateAsync: recordBatchPublicationMutate, isPending: isRecordingBatch } = useRecordBatchPublication();
+  // CLIENT-SIDE WALRUS HOOKS
+  const { mutateAsync: estimateWalrusCost, isPending: isEstimatingCost } = useEstimateWalrusUploadCost();
+  const { mutateAsync: walrusUpload, isPending: isWalrusUploading } = useWalrusUpload();
+  const { mutateAsync: createTaleNFT, isPending: isCreatingNFT } = useCreateTaleNFT();
 
   // Handle key press for hiding slash tip
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -121,7 +117,6 @@ const CreateTalePage: React.FC = () => {
 
   // Add global keyboard listener
   useEffect(() => {
-    // Only add the listener if we're still showing the tip
     if (showSlashTip) {
       document.addEventListener('keydown', handleKeyDown);
     }
@@ -225,7 +220,7 @@ const CreateTalePage: React.FC = () => {
     }
   }, [coverImageWalrusUrl]);
 
-  // Updated Handle cover image selection
+  // Handle cover image selection
   const handleCoverUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     console.log('[CreateTalePage] handleCoverUpload (file selection) triggered!');
     const file = event.target.files?.[0];
@@ -240,17 +235,11 @@ const CreateTalePage: React.FC = () => {
       };
       reader.readAsDataURL(file);
       
-      // Clear any old Walrus URL since a new file is selected and not yet uploaded.
-      // The actual upload will happen in handlePublish.
+      // Clear any old Walrus URL since a new file is selected
       setCoverImageWalrusUrl(''); 
       setLastSaved(new Date());
     } else {
-      // If no file is selected (e.g., user cancels file dialog)
-      // Behavior might depend on whether there was a file selected before or a walrus URL
-      // For now, if user cancels, we clear the potential new file and its preview
       setCoverImageFile(null);
-      // If there was a coverImageWalrusUrl (from previous save/load), coverPreviewUrl should revert to it
-      // If not, then clear preview. This logic can be refined based on desired UX.
       const savedWalrusUrl = localStorage.getItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
       setCoverPreviewUrl(savedWalrusUrl || ''); 
     }
@@ -271,10 +260,10 @@ const CreateTalePage: React.FC = () => {
     setTags(newTags);
   };
 
-  // --- NEW: Batch Upload Functions ---
+  // CLIENT-SIDE WALRUS FUNCTIONS
   
-  const handlePrepareBatchUpload = async () => {
-    // Validation - только критические поля для блокчейна
+  const handleEstimation = async () => {
+    // Validation
     if (!currentAccount?.address) {
       enqueueSnackbar('Wallet not connected.', { variant: 'warning' });
       return;
@@ -294,304 +283,222 @@ const CreateTalePage: React.FC = () => {
     }
 
     try {
-      setBatchCostData(null);
-      setShowCostBreakdown(true);
+      setClientSideCostData(null);
+      setShowCostEstimation(true);
 
-      const batchRequest: BatchPublicationRequest = {
-        title,
-        description: description || '',
+      // Estimate costs using client-side Walrus
+      const costData = await estimateWalrusCost({
         content: cleanedHtml,
-        tags: tags || [],
-        wordCount: wordCount || 0,
-        readingTime: readingTime || 1,
-        userAddress: currentAccount.address,
-      };
-
-      const result = await prepareBatchPublicationMutate({
-        coverImage: coverImageFile,
-        data: batchRequest,
+        coverImage: coverImageFile
       });
 
-      setBatchCostData(result);
-      enqueueSnackbar('Cost estimate ready! Review and confirm to publish.', { variant: 'success' });
-    } catch (error: any) {
-      console.error('[CreateTalePage] Error preparing batch upload:', error);
-      enqueueSnackbar(`Failed to calculate costs: ${error.message}`, { variant: 'error' });
-      setShowCostBreakdown(false);
-    }
-  };
-
-  const handleConfirmBatchUpload = async () => {
-    if (!batchCostData || !currentAccount?.address) {
-      return;
-    }
-
-    try {
-      enqueueSnackbar('Please sign the transaction in your wallet...', { variant: 'info', persist: true });
-
-      // Show detailed transaction info
-      enqueueSnackbar(
-        `🔖 Publishing "${title}"\n` +
-        `📷 Cover Image → Walrus Storage\n` +
-        `📝 Content → Walrus Storage\n` +
-        `💰 Total: ${batchCostData.costs.total.walTokens.toFixed(4)} WAL + ${batchCostData.costs.total.suiTokens.toFixed(4)} SUI`,
-        { variant: 'info', persist: true, style: { whiteSpace: 'pre-line' } }
-      );
-
-      // Create transaction from batch data
-      const txb = Transaction.from(batchCostData.transaction);
-      
-      // Add transaction description for wallet UI
-      txb.setSender(currentAccount.address);
-      
-      // Add summary for wallet display
-      const txSummary = `Publish "${title}" tale with cover image and content to Walrus storage`;
-      // Note: setSummary might not be available in current version, so we'll use options instead
-      
-      const currentChainValue = currentAccount.chains[0];
-
-      signAndExecuteTransaction(
-        {
-          transaction: txb,
-          chain: currentChainValue as any,
-        },
-        {
-          onSuccess: async (result: { digest: string; [key: string]: any }) => {
-            enqueueSnackbar('Transaction successful! Recording publication...', { variant: 'info' });
-
-            try {
-              // Record batch publication
-              const recordPayload = {
-                suiTransactionDigest: result.digest,
-                coverBlobId: batchCostData.metadata.coverBlobId,
-                contentBlobId: batchCostData.metadata.contentBlobId,
-                title,
-                description,
-                tags,
-                wordCount,
-                readingTime,
-                userAddress: currentAccount.address,
-              };
-
-              const finalTale = await recordBatchPublicationMutate(recordPayload);
-
-              enqueueSnackbar(`Tale "${finalTale.title}" published successfully!`, { variant: 'success' });
-
-              // Clear form and close dialog
-              setShowCostBreakdown(false);
-              setBatchCostData(null);
-              
-              // Clear localStorage and form
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
-              
-              editor?.commands.setContent('');
-              setTitle('');
-              setDescription('');
-              setCoverImageWalrusUrl('');
-              setCoverPreviewUrl('');
-              setTags([]);
-              setCoverImageFile(null);
-              
-            } catch (recordError: any) {
-              console.error('[CreateTalePage] Error recording batch publication:', recordError);
-              enqueueSnackbar(`Publication recorded on blockchain but database update failed: ${recordError.message}. Digest: ${result.digest}`, 
-                { variant: 'warning', persist: true });
-            }
+      // Adapt the cost data format for CostEstimationModal
+      const adaptedCostData = {
+        costs: {
+          contentStorage: costData.costs.contentStorage,
+          coverStorage: costData.costs.coverStorage,
+          registrationGas: {
+            sui: costData.costs.estimatedGas.sui / 2, // Split gas estimate
+            mist: (Number(costData.costs.estimatedGas.mist) / 2).toString()
           },
-          onError: (error: Error | any) => {
-            console.error('[CreateTalePage] Error signing batch transaction:', error);
-            enqueueSnackbar(`Transaction failed: ${error.message}`, { variant: 'error' });
+          certificationGas: {
+            sui: costData.costs.estimatedGas.sui / 4, // Quarter for certification
+            mist: (Number(costData.costs.estimatedGas.mist) / 4).toString()
+          },
+          nftCreationGas: {
+            sui: costData.costs.estimatedGas.sui / 4, // Quarter for NFT
+            mist: (Number(costData.costs.estimatedGas.mist) / 4).toString()
+          },
+          total: {
+            walTokens: costData.costs.total.walTokens,
+            suiTokens: costData.costs.total.suiTokens,
+            walMist: (Number(costData.costs.contentStorage.mist) + Number(costData.costs.coverStorage.mist)).toString(),
+            suiMist: costData.costs.estimatedGas.mist
           }
         }
-      );
+      };
+
+      setClientSideCostData(adaptedCostData);
+      enqueueSnackbar('Cost estimate ready! Review and confirm to proceed.', { variant: 'success' });
     } catch (error: any) {
-      console.error('[CreateTalePage] Error in batch upload confirmation:', error);
-      enqueueSnackbar(`Publication error: ${error.message}`, { variant: 'error' });
+      console.error('[CreateTalePage] Error estimating costs:', error);
+      enqueueSnackbar(`Failed to estimate costs: ${error.message}`, { variant: 'error' });
+      setShowCostEstimation(false);
     }
   };
 
   const handlePublish = async () => {
-    // Initial validations (wallet, title, description, content)
-    if (!currentAccount || !currentAccount.publicKey || !currentAccount.address || !currentAccount.chains || currentAccount.chains.length === 0) {
-      enqueueSnackbar('Wallet not connected or critical account information missing.', { variant: 'warning' });
+    if (!clientSideCostData || !currentAccount?.address || !coverImageFile) {
       return;
     }
-    if (!title.trim()) {
-      enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
-      return;
-    }
-    if (!description.trim()) {
-      enqueueSnackbar('Description cannot be empty.', { variant: 'error' });
-      return;
-    }
-    const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim(); // Simplified cleaning for example
-    if (!cleanedHtml || cleanedHtml === '<p></p>') {
-        enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
-        return;
-    }
-
-    // Crucial check: Ensure a cover image is either already uploaded or a new one is selected
-    if (!coverImageFile && !coverImageWalrusUrl) {
-        enqueueSnackbar('Please select or upload a cover image.', { variant: 'error' });
-        return;
-    }
-
-    setIsPublishing(true);
-    enqueueSnackbar('Preparing publication...', { variant: 'info' });
 
     try {
-      // 1. User signs authorization message for the backend
-      const messageToSign = `SuiTale content upload authorization for user ${currentAccount.address}. Title: ${title}`;
-      const messageBytes = new TextEncoder().encode(messageToSign);
-      const signedMessageResult = await signPersonalMessage({ message: messageBytes });
+      setIsPublishing(true);
+      setUploadProgress({ step: 'Starting upload...', progress: 0 });
       
-      const publicKeyBytes = currentAccount.publicKey;
-      let publicKeyBase64: string;
-      if (publicKeyBytes && typeof (publicKeyBytes as any).BYTES_PER_ELEMENT === 'number') {
-        publicKeyBase64 = Buffer.from(publicKeyBytes as Uint8Array).toString('base64');
-      } else {
-        enqueueSnackbar('Invalid public key format.', {variant: 'error'});
-        setIsPublishing(false);
-        return;
-      }
-      
-      let signatureScheme = 'sui';
-      if (currentAccount.chains && currentAccount.chains.length > 0) {
-        signatureScheme = currentAccount.chains[0].split(':')[0] || 'sui';
-      }
+      const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim() || '';
 
-      // 2. Prepare publication (backend builds transaction, NO cover upload yet)
-      // coverImageWalrusUrl is omitted here or passed as undefined if a new file is pending
-      // It will be finalized in taleDataForRecord before calling recordPublication
-      const preparePayload: FrontendInitiatePublicationDto = {
-        title,
-        description,
+      // Step 1: Upload to Walrus (registration + certification transactions)
+      const walrusResult = await walrusUpload({
         content: cleanedHtml,
-        coverImageWalrusUrl: coverImageFile ? undefined : coverImageWalrusUrl, // Pass existing URL only if no new file
-        tags,
-        wordCount,
-        readingTime,
+        coverImage: coverImageFile,
         userAddress: currentAccount.address,
-        signature_base64: signedMessageResult.signature,
-        signedMessageBytes_base64: Buffer.from(messageBytes).toString('base64'),
-        publicKey_base64: publicKeyBase64,
-        signatureScheme: signatureScheme,
-        mintPrice: mintPrice,
-        mintCapacity: mintCapacity,
-        royaltyFeeBps,
-      };
-
-      const prepareResult = await preparePublicationMutate(preparePayload);
-      if (!prepareResult || !prepareResult.transactionBlockBytes || !prepareResult.taleDataForRecord) {
-        enqueueSnackbar('Failed to prepare publication: Invalid response from server.', { variant: 'error' });
-        setIsPublishing(false);
-        return;
-      }
-      
-      let { transactionBlockBytes, taleDataForRecord } = prepareResult; // taleDataForRecord might miss cover url if new file
-
-      enqueueSnackbar('Please sign the transaction in your wallet to publish your tale.', { variant: 'info', persist: true });
-
-      // 3. User signs and executes the batch transaction 
-      enqueueSnackbar(`Sign transaction to publish "${title}" with cover image and content in one batch operation.`, { variant: 'info', persist: true });
-      
-      const txb = Transaction.from(transactionBlockBytes);
-      const currentChainValue = currentAccount.chains[0];
-      
-      signAndExecuteTransaction(
-        {
-          transaction: txb,
-          chain: currentChainValue as any,
-        },
-        {
-          onSuccess: async (result: { digest: string; [key: string]: any }) => {
-            enqueueSnackbar('Transaction submitted! Processing...', { variant: 'info', persist: true });
-            
-            let finalCoverImageUrlForRecord = taleDataForRecord.coverImageWalrusUrl; // From prepareResult initially
-            let mutableTaleDataForRecord = { ...taleDataForRecord }; // Make a mutable copy
-
-            // 4. If blockchain TX is successful, upload cover if a new one was selected
-            if (coverImageFile) {
-              enqueueSnackbar('Uploading cover image...', { variant: 'info' });
-              try {
-                const uploadResult = await uploadCoverToWalrus(coverImageFile);
-                if (uploadResult && uploadResult.url) {
-                  finalCoverImageUrlForRecord = uploadResult.url;
-                  setCoverImageWalrusUrl(finalCoverImageUrlForRecord); // Update state for UI
-                  localStorage.setItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL, finalCoverImageUrlForRecord);
-                  setCoverImageFile(null); // Clear the file object
-                  enqueueSnackbar('Cover image uploaded successfully!', { variant: 'success' });
-                } else {
-                  throw new Error('Invalid response from cover upload server after transaction.');
-                }
-              } catch (uploadError: any) {
-                console.error('[CreateTalePage] Error uploading cover to Walrus after transaction:', uploadError);
-                enqueueSnackbar(`Error uploading cover post-transaction: ${uploadError.message || 'Unknown error'}. Please try again or contact support.`, { variant: 'error', persist: true });
-                // Decide recovery path: Here, we might allow recording without a cover or with an old one if available
-                // For now, if upload fails, we proceed with whatever finalCoverImageUrlForRecord holds (could be old or undefined)
-                // This might lead to a tale without a new cover if upload failed.
-                // A more robust solution would offer user to retry cover upload or cancel recording.
+        signAndExecuteTransaction: ({ transaction }) =>
+          new Promise((resolve, reject) => {
+            signAndExecuteTransaction(
+              { transaction },
+              {
+                onSuccess: resolve,
+                onError: reject
               }
-            } else if (coverImageWalrusUrl) { // No new file, but an existing walrus URL from state (localStorage)
-                finalCoverImageUrlForRecord = coverImageWalrusUrl;
-            }
+            );
+          }),
+        onProgress: (step: string, progress: number) => {
+          setUploadProgress({ step, progress });
+        }
+      });
 
-            // Ensure we have a cover URL before recording, critical for DB record
-            if (!finalCoverImageUrlForRecord) {
-                enqueueSnackbar('Cover image is missing after transaction and upload attempt. Cannot record publication.', { variant: 'error', persist: true });
-                setIsPublishing(false); // Stop the process here
-                return;
-            }
+      setUploadProgress({ step: 'Creating NFT...', progress: 90 });
 
-            mutableTaleDataForRecord.coverImageWalrusUrl = finalCoverImageUrlForRecord;
+      // Step 2: Create Tale NFT
+      const nftResult = await createTaleNFT({
+        contentBlobId: walrusResult.contentBlobId,
+        coverBlobId: walrusResult.coverBlobId,
+        title,
+        description: description || title,
+        mintPrice: parseInt(mintPrice) / 1_000_000_000, // Convert MIST to SUI
+        mintCapacity: parseInt(mintCapacity),
+        royaltyFeeBps,
+        userAddress: currentAccount.address,
+        signAndExecuteTransaction: ({ transaction }) =>
+          new Promise((resolve, reject) => {
+            signAndExecuteTransaction(
+              { transaction },
+              {
+                onSuccess: resolve,
+                onError: reject
+              }
+            );
+          })
+      });
 
-            // 5. Record publication with backend
-            try {
-              enqueueSnackbar('Recording publication details...', {variant: 'info'});
-              const recordPayload: RecordPublicationDto = { 
-                txDigest: result.digest,
-                taleDataForRecord: mutableTaleDataForRecord, // Use the potentially updated record
-              };
-              const finalTale = await recordPublicationMutate(recordPayload);
-              
-              enqueueSnackbar(`Tale "${finalTale.title}" published successfully! Digest: ${result.digest}`, { variant: 'success' });
-              
-              // Clear form and local storage
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
-              localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
-              editor?.commands.setContent('');
-              setTitle('');
-              setDescription('');
-              setCoverImageWalrusUrl('');
-              setCoverPreviewUrl('');
-              setTags([]);
-              setCoverImageFile(null); // Ensure file is cleared
-            } catch (recordError: any) {
-              console.error('[CreateTalePage] Error recording publication:', recordError);
-              enqueueSnackbar(`Error recording publication: ${recordError.response?.data?.message || recordError.message || 'Unknown error'}. Your tale is on-chain but might not be listed. Digest: ${result.digest}`, { variant: 'error', persist: true });
-            } finally {
-              setIsPublishing(false); 
-            }
-          },
-          onError: (error: Error | any) => {
-            console.error('[CreateTalePage] Error signing/executing transaction:', error);
-            const signErrMessage = error instanceof Error ? error.message : 'Transaction signing failed';
-            enqueueSnackbar(`Transaction failed: ${signErrMessage}`, { variant: 'error' });
-            setIsPublishing(false);
+      setUploadProgress({ step: 'Saving to database...', progress: 95 });
+
+      // Step 3: Wait for transaction to be indexed before saving to database
+      console.log('[CreateTalePage] Waiting for transaction to be indexed...');
+      await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds for indexing
+
+      // Step 4: Save tale to database via API with retry logic
+      let dbSaveSuccess = false;
+      let retryCount = 0;
+      const maxRetries = 3;
+      const retryDelay = 2000; // 2 seconds
+
+      while (!dbSaveSuccess && retryCount < maxRetries) {
+        try {
+          retryCount++;
+          setUploadProgress({ 
+            step: `Saving to database... (attempt ${retryCount}/${maxRetries})`, 
+            progress: 95 + (retryCount * 1) 
+          });
+
+          // Add delay for first retry to allow transaction indexing
+          if (retryCount > 1) {
+            console.log(`[CreateTalePage] Waiting ${retryDelay}ms before database save retry...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+          }
+
+          const taleRecord = await talesApi.recordPublication({
+            txDigest: nftResult.digest,
+            taleDataForRecord: {
+              title,
+              description: description || title,
+              contentBlobId: walrusResult.contentBlobId,
+              coverBlobId: walrusResult.coverBlobId,
+              coverImageUrl: walrusService.getWalrusUrl(walrusResult.coverBlobId),
+              tags: tags,
+              wordCount: wordCount || 0,
+              readingTime: readingTime || 1,
+              authorId: currentAccount.address,
+              mintPrice: parseInt(mintPrice),
+              mintCapacity: parseInt(mintCapacity),
+              royaltyFeeBps,
+            },
+          });
+          
+          console.log('[CreateTalePage] Tale saved to database:', taleRecord.id);
+          dbSaveSuccess = true;
+        } catch (dbError: any) {
+          console.warn(`[CreateTalePage] Database save attempt ${retryCount} failed:`, dbError);
+          
+          // Don't retry on non-retryable errors
+          if (dbError.message?.includes('validation') || 
+              dbError.message?.includes('Invalid') ||
+              retryCount >= maxRetries) {
+            console.error('[CreateTalePage] Database save failed permanently (NFT created successfully):', dbError);
+            
+            // Show user-friendly message about the issue
+            enqueueSnackbar(
+              'NFT created successfully, but database save failed. ' +
+              'Your tale is published on blockchain but may not appear in the list immediately. ' +
+              'Please contact support if needed.',
+              { variant: 'warning', persist: true }
+            );
+            break;
           }
         }
+      }
+
+      if (!dbSaveSuccess) {
+        console.error('[CreateTalePage] All database save attempts failed, but NFT was created successfully');
+      }
+
+      setUploadProgress({ step: 'Publication completed!', progress: 100 });
+
+      // Show success message with appropriate context
+      const successMessage = dbSaveSuccess 
+        ? `🎉 Tale "${title}" published successfully!\n📋 Walrus: ${formatDigest(walrusResult.contentBlobId)}\n🎨 NFT: ${formatDigest(nftResult.digest)}\n💾 Database: Saved`
+        : `🎉 Tale "${title}" published to blockchain!\n📋 Walrus: ${formatDigest(walrusResult.contentBlobId)}\n🎨 NFT: ${formatDigest(nftResult.digest)}\n⚠️ Database: Save pending (may appear in list later)`;
+
+      enqueueSnackbar(
+        successMessage,
+        { variant: dbSaveSuccess ? 'success' : 'warning', persist: true, style: { whiteSpace: 'pre-line' } }
       );
+
+      // Clear form
+      setShowCostEstimation(false);
+      setClientSideCostData(null);
+      setUploadProgress(null);
+      
+      // Clear form fields
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TITLE);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.CONTENT);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.COVER_WALRUS_URL);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.DESCRIPTION);
+      localStorage.removeItem(LOCAL_STORAGE_KEYS.TAGS);
+      
+      editor?.commands.setContent('');
+      setTitle('');
+      setDescription('');
+      setCoverImageWalrusUrl('');
+      setCoverPreviewUrl('');
+      setTags([]);
+      setCoverImageFile(null);
+
     } catch (error: any) {
-      console.error('[CreateTalePage] Error in handlePublish (outer try-catch): ', error);
-      const genErrMessage = error instanceof Error ? error.message : 'Publication process failed';
-      enqueueSnackbar(`Publication error: ${genErrMessage}`, { variant: 'error' });
+      console.error('[CreateTalePage] Error in publication:', error);
+      
+      // Handle user rejection separately
+      if (error.message.includes('cancelled by user') || error.message.includes('User rejection')) {
+        enqueueSnackbar('Publication cancelled by user', { variant: 'warning' });
+      } else if (error.message.includes('signing failed')) {
+        enqueueSnackbar('Transaction signing failed. Please check your wallet and try again.', { variant: 'error' });
+      } else {
+        enqueueSnackbar(`Publication failed: ${error.message}`, { variant: 'error' });
+      }
+      
+      setUploadProgress(null);
+    } finally {
       setIsPublishing(false);
     }
   };
@@ -601,14 +508,14 @@ const CreateTalePage: React.FC = () => {
   return (
     <Box sx={editorContainerStyles as SxProps<Theme>}>
       <EditorHeader 
-        isSaving={isPublishing || isUploadingCover || isPreparingBatch}
-        isUploadingCover={isUploadingCover}
+        isSaving={isPublishing || isEstimatingCost || isWalrusUploading || isCreatingNFT}
+        isUploadingCover={false}
         lastSaved={lastSaved}
         onTogglePreview={togglePreview}
         wordCount={wordCount}
         readingTime={readingTime}
         onToggleMetadata={toggleMetadata}
-        onSave={useBatchUpload ? handlePrepareBatchUpload : handlePublish}
+        onSave={handleEstimation}
       />
       
       <Box sx={{ 
@@ -622,7 +529,7 @@ const CreateTalePage: React.FC = () => {
         <CoverImageUpload 
           coverImage={coverPreviewUrl}
           onCoverUpload={handleCoverUpload}
-          isUploading={isUploadingCover}
+          isUploading={false}
         />
       </Box>
 
@@ -666,6 +573,7 @@ const CreateTalePage: React.FC = () => {
         royaltyFeeBps={royaltyFeeBps}
         onRoyaltyFeeBpsChange={(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setRoyaltyFeeBps(Number(e.target.value))}
       />
+      
       <PreviewDialog 
         open={previewOpen} 
         onClose={togglePreview} 
@@ -678,13 +586,15 @@ const CreateTalePage: React.FC = () => {
         readingTime={readingTime}
       />
 
-      <CostBreakdown
-        open={showCostBreakdown}
-        onClose={() => setShowCostBreakdown(false)}
-        onConfirm={handleConfirmBatchUpload}
-        costData={batchCostData}
-        isLoading={isPreparingBatch}
-        isConfirming={isRecordingBatch}
+      <CostEstimationModal
+        open={showCostEstimation}
+        onClose={() => setShowCostEstimation(false)}
+        onConfirm={handlePublish}
+        costData={clientSideCostData}
+        loading={isEstimatingCost || isWalrusUploading || isCreatingNFT}
+        title={title}
+        contentSize={editor?.getText().length || 0}
+        coverImageSize={coverImageFile?.size || 0}
       />
     </Box>
   );

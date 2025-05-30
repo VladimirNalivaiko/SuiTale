@@ -1,4 +1,4 @@
-// Layout components
+// Main layout components
 export { Header } from './Header/Header';
 export { Footer } from './Footer/Footer';
 
@@ -8,7 +8,7 @@ export { PopularTales } from './PopularTales/PopularTales';
 export { HowItWorks } from './HowItWorks/HowItWorks';
 export { FeaturedAuthors } from './FeaturedAuthors/FeaturedAuthors';
 
-// Новые компоненты дизайна
+// Design components
 export { TrustedBy } from './TrustedBy/TrustedBy';
 export { Features } from './Features/Features';
 export { Testimonials } from './Testimonials/Testimonials';
@@ -16,8 +16,20 @@ export { Sponsors } from './Sponsors/Sponsors';
 
 // Common components
 export { Button } from './Button/Button';
-// export { Tale } from './Tale';
-// export { Editor } from './Editor';
+
+// Re-export all components
+export { TipTap } from './TipTap';
+export { BasicEditor } from './BasicEditor';
+export { Layout } from './Layout';
+export { ProtectedRoute } from './ProtectedRoute';
+export { SUIWallet } from './wallet';
+export { ConnectWallet } from './wallet';
+export { Wallet } from './wallet';
+export { TaleCard } from './TaleCard';
+export { EditorContent } from './EditorContent';
+export { TalesList } from './TalesList';
+export { UserMenu } from './UserMenu';
+export { TalePreview } from './TalePreview';
 
 // Profile components
 // export { MyProfile } from './MyProfile';
