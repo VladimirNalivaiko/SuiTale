@@ -17,20 +17,6 @@ export { Sponsors } from './Sponsors/Sponsors';
 // Common components
 export { Button } from './Button/Button';
 
-// Re-export all components
-export { TipTap } from './TipTap';
-export { BasicEditor } from './BasicEditor';
-export { Layout } from './Layout';
-export { ProtectedRoute } from './ProtectedRoute';
-export { SUIWallet } from './wallet';
-export { ConnectWallet } from './wallet';
-export { Wallet } from './wallet';
-export { TaleCard } from './TaleCard';
-export { EditorContent } from './EditorContent';
-export { TalesList } from './TalesList';
-export { UserMenu } from './UserMenu';
-export { TalePreview } from './TalePreview';
-
 // Profile components
 // export { MyProfile } from './MyProfile';
 

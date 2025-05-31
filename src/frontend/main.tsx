@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AppThemeProvider } from './contexts/ThemeContext'; // Our useAppTheme hook is no longer needed here
 import { SuiClientProvider, WalletProvider } from '@mysten/dapp-kit';
 import { getFullnodeUrl } from '@mysten/sui/client'; // Import getFullnodeUrl
+import { SnackbarProvider } from 'notistack';
 import '@mysten/dapp-kit/dist/index.css'; // Styles for dapp-kit
 
 const queryClient = new QueryClient({
@@ -38,9 +39,20 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <SuiClientProvider networks={networkConfig} defaultNetwork="testnet">
         <WalletProvider autoConnect={false}> {/* autoConnect={false} - user clicks button to connect */}
-          <AppThemeProvider>
-              <Router />
-          </AppThemeProvider>
+          <SnackbarProvider 
+            maxSnack={3}
+            anchorOrigin={{
+              vertical: 'bottom',
+              horizontal: 'right',
+            }}
+            dense
+            preventDuplicate
+            autoHideDuration={5000}
+          >
+            <AppThemeProvider>
+                <Router />
+            </AppThemeProvider>
+          </SnackbarProvider>
         </WalletProvider>
       </SuiClientProvider>
     </QueryClientProvider>

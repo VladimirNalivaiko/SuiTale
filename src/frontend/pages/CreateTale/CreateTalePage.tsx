@@ -272,11 +272,22 @@ const CreateTalePage: React.FC = () => {
       enqueueSnackbar('Title cannot be empty.', { variant: 'error' });
       return;
     }
+    
+    // More robust content validation
+    const contentText = editor?.getText().trim() || '';
     const cleanedHtml = editor?.getHTML().replace(/<!--.*?-->/gs, '').trim();
-    if (!cleanedHtml || cleanedHtml === '<p></p>') {
-      enqueueSnackbar('Content cannot be empty.', { variant: 'error' });
+    
+    if (!contentText || contentText.length === 0 || !cleanedHtml || cleanedHtml === '<p></p>' || cleanedHtml === '<p></p>'.trim()) {
+      enqueueSnackbar('Content cannot be empty. Please write some content for your tale.', { variant: 'error' });
       return;
     }
+    
+    // Check if content has at least some meaningful text (not just spaces/newlines)
+    if (contentText.length < 10) {
+      enqueueSnackbar('Content is too short. Please write at least 10 characters.', { variant: 'error' });
+      return;
+    }
+    
     if (!coverImageFile) {
       enqueueSnackbar('Please select a cover image.', { variant: 'error' });
       return;

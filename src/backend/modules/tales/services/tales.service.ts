@@ -1,51 +1,31 @@
-import { Injectable, NotFoundException, HttpException, HttpStatus, Logger } from '@nestjs/common';
+import { Injectable, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Tale } from '../schemas/tale.schema';
-import { CreateTaleDto } from '../dto/create-tale.dto';
-import { UpdateTaleDto } from '../dto/update-tale.dto';
-import { InitiatePublicationDto } from '../dto/initiate-publication.dto';
-import { RecordBatchPublicationDto } from '../dto/batch-publication.dto';
-import { WalrusService } from '../../walrus/services/walrus.service';
+import { RecordPublicationDto } from '../dto/record-publication.dto';
 import { SuiService } from '../../sui/services/sui.service';
-import { Ed25519PublicKey } from '@mysten/sui/keypairs/ed25519';
-import { Secp256k1PublicKey } from '@mysten/sui/keypairs/secp256k1';
-import { PublicKey as SuiPublicKeyCryptography } from '@mysten/sui/cryptography';
+import { WalrusService } from '../../walrus/services/walrus.service';
 
-// Frontend-aligned interfaces for return types
-export class TaleSummary {
-  id: string;
-  title: string;
-  description: string;
-  coverImageUrl?: string;
-  contentBlobId: string;
-  tags: string[];
-  wordCount: number;
-  readingTime: number;
-  authorId?: string;
-  createdAt: string;
-  updatedAt: string;
-  suiTxDigest?: string;
-  suiObjectId?: string;
-  coverImageBlobId?: string;
-  coverImageWalrusUrl?: string;
+export interface TaleSummary {
+    id: string;
+    title: string;
+    description: string;
+    blobId: string;
+    coverImageUrl?: string;
+    coverImageBlobId?: string;
+    coverImageWalrusUrl?: string;
+    tags: string[];
+    wordCount: number;
+    readingTime: number;
+    authorId?: string;
+    suiTxDigest?: string;
+    suiObjectId?: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
-interface TaleWithContent extends TaleSummary {
-  content: string;
-}
-
-// Interface for the new return type of prepareTalePublication
-export interface PreparePublicationResult {
-    transactionBlockBytes: string;
-    taleDataForRecord: any; // Consider defining a more specific type later
-}
-
-// DTO for recordTalePublication - define if not already present elsewhere
-// For now, assuming it expects txDigest and the taleDataForRecord from PreparePublicationResult
-export interface RecordPublicationData {
-    txDigest: string;
-    taleDataForRecord: any;
+export interface TaleWithContent extends TaleSummary {
+    content: string;
 }
 
 @Injectable()
@@ -54,169 +34,31 @@ export class TalesService {
 
     constructor(
         @InjectModel(Tale.name) private taleModel: Model<Tale>,
-        private readonly walrusService: WalrusService,
-        private readonly suiService: SuiService,
+        private suiService: SuiService,
+        private walrusService: WalrusService,
     ) {}
 
-    // Helper function to map Mongoose Tale document to TaleSummary interface
-    private mapToTaleSummary(taleDoc: Tale): TaleSummary {
+    private toTaleSummary(taleDoc: Tale): TaleSummary {
         return {
             id: taleDoc.id,
             title: taleDoc.title,
             description: taleDoc.description,
-            contentBlobId: taleDoc.contentBlobId || taleDoc.blobId, // Prefer new field, fallback to legacy
-            coverImageUrl: taleDoc.coverImageWalrusUrl || taleDoc.coverImageUrl, // Prefer Walrus URL, fallback to legacy
+            blobId: taleDoc.blobId,
+            coverImageUrl: taleDoc.coverImageUrl,
+            coverImageBlobId: taleDoc.coverImageBlobId,
+            coverImageWalrusUrl: taleDoc.coverImageWalrusUrl,
             tags: taleDoc.tags,
             wordCount: taleDoc.wordCount,
             readingTime: taleDoc.readingTime,
             authorId: taleDoc.authorId,
-            createdAt: taleDoc.createdAt.toISOString(),
-            updatedAt: taleDoc.updatedAt.toISOString(),
             suiTxDigest: taleDoc.suiTxDigest,
             suiObjectId: taleDoc.suiObjectId,
-            // Include new fields for API consumers
-            coverImageBlobId: taleDoc.coverImageBlobId,
-            coverImageWalrusUrl: taleDoc.coverImageWalrusUrl,
+            createdAt: taleDoc.createdAt.toISOString(),
+            updatedAt: taleDoc.updatedAt.toISOString(),
         };
     }
 
-    async prepareTalePublication(dto: InitiatePublicationDto): Promise<PreparePublicationResult> {
-        this.logger.log('[TalesService] prepareTalePublication CALLED with DTO:', JSON.stringify(dto, null, 2));
-        let publicKey: SuiPublicKeyCryptography | undefined = undefined;
-        
-        let rawFlaggedPublicKeyBytes: Buffer;
-        try {
-            rawFlaggedPublicKeyBytes = Buffer.from(dto.publicKey_base64, 'base64');
-        } catch (error) {
-            this.logger.error('Error decoding publicKey_base64:', error.stack);
-            throw new HttpException('Invalid publicKey_base64 format.', HttpStatus.BAD_REQUEST);
-        }
-
-        this.logger.debug(`[TalesService] Decoded publicKey_base64 length: ${rawFlaggedPublicKeyBytes.length}`);
-
-        const publicKeySignatureFlag = rawFlaggedPublicKeyBytes[0];
-        const rawPublicKeyOnlyBytes = rawFlaggedPublicKeyBytes.slice(1);
-
-        try {
-            if (publicKeySignatureFlag === 0x00 && rawPublicKeyOnlyBytes.length === 32) { // Ed25519
-                this.logger.debug('[TalesService] Attempting Ed25519 scheme for public key.');
-                publicKey = new Ed25519PublicKey(rawPublicKeyOnlyBytes);
-            } else if (publicKeySignatureFlag === 0x01 && rawPublicKeyOnlyBytes.length === 33) { // Secp256k1
-                this.logger.debug('[TalesService] Attempting Secp256k1 scheme for public key.');
-                publicKey = new Secp256k1PublicKey(rawPublicKeyOnlyBytes);
-            } else {
-                this.logger.warn(`[TalesService] Public key flag/length unexpected: Flag ${publicKeySignatureFlag}, Raw Key Length ${rawPublicKeyOnlyBytes.length}. DTO scheme: ${dto.signatureScheme}`);
-                 throw new HttpException(
-                    `Unsupported or unidentifiable public key format from publicKey_base64. Flag: ${publicKeySignatureFlag}, Raw Key Length: ${rawPublicKeyOnlyBytes.length}`,
-                    HttpStatus.BAD_REQUEST,
-                );
-            }
-        } catch (error) {
-            if (error instanceof HttpException) throw error;
-            this.logger.error('[TalesService] Error constructing PublicKey from publicKey_base64:', error.stack);
-            throw new HttpException('Failed to construct PublicKey from provided public key bytes.', HttpStatus.BAD_REQUEST);
-        }
-
-        if (!publicKey) {
-            throw new HttpException('Public key could not be determined from publicKey_base64.', HttpStatus.INTERNAL_SERVER_ERROR );
-        }
-
-        const derivedAddress = publicKey.toSuiAddress();
-        this.logger.debug(`[TalesService] Derived address from PK: ${derivedAddress}, User address from DTO: ${dto.userAddress}`);
-        if (derivedAddress !== dto.userAddress) {
-            throw new HttpException(
-                `User address (${dto.userAddress}) does not match derived address (${derivedAddress}) from public key.`,
-                HttpStatus.UNAUTHORIZED,
-            );
-        }
-
-        let combinedSignatureBytes: Buffer;
-        try {
-            combinedSignatureBytes = Buffer.from(dto.signature_base64, 'base64');
-            this.logger.debug(`[TalesService] Decoded combinedSignatureBytes length: ${combinedSignatureBytes.length}`);
-
-            const signatureSchemeFlagFromSignature = combinedSignatureBytes[0];
-            this.logger.debug(`[TalesService] Signature scheme flag from combined signature: ${signatureSchemeFlagFromSignature}`);
-
-            if (signatureSchemeFlagFromSignature !== publicKeySignatureFlag) {
-                throw new HttpException(
-                    `Signature scheme flag in signature_base64 (${signatureSchemeFlagFromSignature}) does not match public key's scheme flag (${publicKeySignatureFlag}).`,
-                    HttpStatus.BAD_REQUEST
-                );
-            }
-
-        } catch (error) {
-            if (error instanceof HttpException) throw error;
-            this.logger.error('Error decoding or parsing signature_base64:', error.stack);
-            throw new HttpException('Invalid signature_base64 format or structure.', HttpStatus.BAD_REQUEST);
-        }
-        
-        let isValidSignature: boolean;
-        try {
-            const originalMessageString = `SuiTale content upload authorization for user ${dto.userAddress}. Title: ${dto.title}`;
-            const originalMessageBytes = new TextEncoder().encode(originalMessageString);
-            this.logger.debug(`[TalesService] Verifying with fullSignatureFromDto (dto.signature_base64) and original message.`);
-            
-            isValidSignature = await publicKey.verifyPersonalMessage(originalMessageBytes, dto.signature_base64);
-
-        } catch (error) {
-            this.logger.error('[TalesService] Error during signature verification process:', error.stack);
-            throw new HttpException('Error verifying signature.', HttpStatus.INTERNAL_SERVER_ERROR);
-        }
-
-        if (!isValidSignature) {
-            throw new HttpException('Signature verification failed.', HttpStatus.UNAUTHORIZED );
-        }
-        this.logger.log('[TalesService] Signature verified successfully for user:', dto.userAddress);
-
-        const contentBlobId = await this.walrusService.uploadTale(dto.content);
-        this.logger.log(`[TalesService] Main content uploaded to Walrus. Content Blob ID: ${contentBlobId}`);
-        
-        const taleDescription = dto.description || 'An amazing SuiTale story!';
-        const taleCoverImageUrl = dto.coverImageWalrusUrl || ''; 
-        this.logger.debug(`[TalesService] Using Cover Image URL: ${taleCoverImageUrl}`);
-
-        const taleMintPrice = dto.mintPrice || '100000000'; 
-        const taleMintCapacity = dto.mintCapacity || '100'; 
-        const taleAuthorMintBeneficiary = dto.userAddress;
-        const taleRoyaltyFeeBps = dto.royaltyFeeBps !== undefined ? dto.royaltyFeeBps : 500; 
-
-        this.logger.debug(`[TalesService] Building Sui transaction with params: contentBlobId: ${contentBlobId}, title: ${dto.title}, desc_len: ${taleDescription.length}, coverUrl: ${taleCoverImageUrl}, price: ${taleMintPrice}, capacity: ${taleMintCapacity}, royalty: ${taleRoyaltyFeeBps}`);
-
-        const transactionBlockBytes = this.suiService.buildPublishTaleTemplateTransactionBlock(
-            contentBlobId,
-            dto.title,
-            taleDescription,
-            taleCoverImageUrl,
-            taleMintPrice,
-            taleMintCapacity,
-            taleAuthorMintBeneficiary,
-            taleRoyaltyFeeBps,
-        );
-        this.logger.log(`[TalesService] Sui transaction block built. Bytes length: ${transactionBlockBytes.length}`);
-
-        // Prepare data for saving after successful transaction
-        const taleDataForRecord = {
-            title: dto.title,
-            description: taleDescription,
-            blobId: contentBlobId,
-            coverImageUrl: taleCoverImageUrl,
-            tags: dto.tags || [],
-            wordCount: dto.wordCount,
-            readingTime: dto.readingTime,
-            authorId: dto.userAddress,
-            mintPrice: taleMintPrice,
-            mintCapacity: taleMintCapacity,
-            royaltyFeeBps: taleRoyaltyFeeBps,
-        };
-        
-        return {
-            transactionBlockBytes,
-            taleDataForRecord,
-        };
-    }
-
-    async recordTalePublication(data: RecordPublicationData): Promise<TaleSummary> {
+    async recordTalePublication(data: RecordPublicationDto): Promise<TaleSummary> {
         const { txDigest, taleDataForRecord } = data;
         this.logger.log(`[TalesService] recordTalePublication CALLED with txDigest: ${txDigest}`);
 
@@ -249,16 +91,13 @@ export class TalesService {
                 }
             }
             
-            if (!suiObjectId && txResponse.effects?.created) { // Fallback if not found in objectChanges
-                 for (const createdObj of txResponse.effects.created) {
+            if (!suiObjectId && txResponse.effects?.created) {
+                for (const createdObj of txResponse.effects.created) {
                     // This is a less precise way, might need adjustment based on exact objectType string from your contract
-                    // if (createdObj.objectType && createdObj.objectType.includes('::Tale')) { 
-                    // For now, we rely on objectChanges which is more robust for specific type matching.
-                    // This part can be refined if objectChanges is not sufficient or available.
-                 }
-                 if (!suiObjectId) {
+                }
+                if (!suiObjectId) {
                     this.logger.warn(`[TalesService] Could not find created Tale objectId in objectChanges for tx ${txDigest}. It might be in effects.created if the type can be reliably identified.`);
-                 }
+                }
             }
 
             const newTaleData = {
@@ -277,173 +116,60 @@ export class TalesService {
                 suiObjectId: suiObjectId, // May be undefined if not found
             };
 
+            this.logger.debug('[TalesService] Creating new tale document with data:', JSON.stringify(newTaleData, null, 2));
+
             const createdTaleDoc = new this.taleModel(newTaleData);
             const savedTaleDoc = await createdTaleDoc.save();
-            this.logger.log(`[TalesService] Tale record saved to DB. ID: ${savedTaleDoc.id}, Sui Object ID: ${suiObjectId}`);
-            
-            return this.mapToTaleSummary(savedTaleDoc);
+
+            this.logger.log(`[TalesService] Tale publication recorded successfully with ID: ${savedTaleDoc.id}`);
+            return this.toTaleSummary(savedTaleDoc);
 
         } catch (error) {
-            if (error instanceof HttpException) throw error;
             this.logger.error(`[TalesService] Error in recordTalePublication for txDigest ${txDigest}:`, error.stack);
-            throw new HttpException(
-                `Failed to record tale publication for tx ${txDigest}: ${error.message}`,
-                HttpStatus.INTERNAL_SERVER_ERROR,
-            );
+            throw error; // Re-throw to be handled by controller
         }
-    }
-
-    async create(createTaleDto: CreateTaleDto): Promise<TaleSummary> {
-        this.logger.debug('[TalesService] create (legacy) CALLED with DTO:', createTaleDto);
-        const taleDataForDb = {
-            ...createTaleDto,
-            blobId: 'placeholder-blob-id',
-            coverImage: createTaleDto.coverImageUrl,
-        };
-
-        const createdTaleDoc = new this.taleModel(taleDataForDb);
-        const savedTaleDoc = await createdTaleDoc.save();
-        return this.mapToTaleSummary(savedTaleDoc);
     }
 
     async findAll(limit = 10, offset = 0): Promise<TaleSummary[]> {
-        this.logger.debug(`[TalesService] findAll CALLED with limit: ${limit}, offset: ${offset}`);
         const taleDocs = await this.taleModel
             .find()
-            .sort({ createdAt: -1 })
-            .skip(offset)
             .limit(limit)
+            .skip(offset)
+            .sort({ createdAt: -1 })
             .exec();
-        return taleDocs.map(doc => this.mapToTaleSummary(doc));
-    }
-
-    async findOne(id: string): Promise<TaleSummary> {
-        this.logger.debug(`[TalesService] findOne CALLED with id: ${id}`);
-        const taleDoc = await this.taleModel.findById(id).exec();
-        if (!taleDoc) {
-            throw new NotFoundException(`Tale with ID ${id} not found`);
-        }
-        return this.mapToTaleSummary(taleDoc);
+        return taleDocs.map(doc => this.toTaleSummary(doc));
     }
 
     async getFullTale(id: string): Promise<TaleWithContent> {
         this.logger.debug(`[TalesService] getFullTale CALLED with id: ${id}`);
+        
         const taleDoc = await this.taleModel.findById(id).exec();
         if (!taleDoc) {
-            throw new NotFoundException(`Tale with ID ${id} not found`);
+            throw new HttpException(`Tale with ID ${id} not found`, HttpStatus.NOT_FOUND);
         }
 
-        // Use new contentBlobId field, fallback to legacy blobId
-        const contentBlobId = taleDoc.contentBlobId || taleDoc.blobId;
-        if (!contentBlobId) {
-            this.logger.error(`[TalesService] Tale with ID ${id} has no contentBlobId or blobId for content.`);
-            throw new NotFoundException(`Content blob ID not found for Tale with ID ${id}`);
+        // Get content from Walrus using the content blob ID (or fallback to main blobId)
+        const blobIdToUse = taleDoc.contentBlobId || taleDoc.blobId;
+        if (!blobIdToUse) {
+            throw new HttpException(`Tale ${id} has no content blob ID`, HttpStatus.NOT_FOUND);
         }
 
-        let content = '';
-        try {
-            content = await this.walrusService.getContent(contentBlobId);
-            this.logger.debug(`[TalesService] Content fetched from Walrus for contentBlobId: ${contentBlobId}`);
-        } catch (error) {
-            this.logger.error(`[TalesService] Failed to fetch content from Walrus for contentBlobId ${contentBlobId}:`, error.stack);
-            content = "Error fetching content from Walrus."; 
-        }
+        this.logger.debug(`[TalesService] Fetching content from Walrus with blobId: ${blobIdToUse}`);
         
-        const taleSummary = this.mapToTaleSummary(taleDoc);
-        return {
-            ...taleSummary,
-            content: content,
-        };
-    }
-
-    async update(id: string, updateTaleDto: UpdateTaleDto): Promise<TaleSummary> {
-        this.logger.debug(`[TalesService] update CALLED for id: ${id} with DTO:`, updateTaleDto);
-        const updateData: any = { ...updateTaleDto };
-        if (updateTaleDto.coverImageUrl) {
-            updateData.coverImage = updateTaleDto.coverImageUrl;
-        }
-
-        const existingTale = await this.taleModel
-            .findByIdAndUpdate(id, updateData, { new: true })
-            .exec();
-        if (!existingTale) {
-            throw new NotFoundException(`Tale with ID ${id} not found`);
-        }
-        return this.mapToTaleSummary(existingTale);
-    }
-
-    async remove(id: string): Promise<void> {
-        this.logger.debug(`[TalesService] remove CALLED for id: ${id}`);
-        const result = await this.taleModel.findByIdAndDelete(id).exec();
-        if (!result) {
-            throw new NotFoundException(`Tale with ID ${id} not found`);
-        }
-    }
-
-    /**
-     * Record batch publication after user successfully executes the batch transaction
-     * @param dto Data from batch publication including transaction digest and blob IDs
-     * @returns Created tale summary
-     */
-    async recordBatchPublication(dto: RecordBatchPublicationDto): Promise<TaleSummary> {
-        this.logger.log(`[TalesService] recordBatchPublication CALLED with txDigest: ${dto.suiTransactionDigest}`);
-        this.logger.debug('[TalesService] Batch publication data:', JSON.stringify(dto, null, 2));
-
         try {
-            // 1. Verify transaction success on Sui
-            const txResponse = await this.suiService.suiClient.getTransactionBlock({
-                digest: dto.suiTransactionDigest,
-                options: { showEffects: true, showObjectChanges: true },
-            });
-
-            if (txResponse.effects?.status?.status !== 'success') {
-                this.logger.error(`[TalesService] Batch transaction ${dto.suiTransactionDigest} failed. Status: ${txResponse.effects?.status?.status}, Error: ${txResponse.effects?.status?.error}`);
-                throw new HttpException(
-                    `Sui batch transaction ${dto.suiTransactionDigest} failed: ${txResponse.effects?.status?.error || 'Unknown error'}`,
-                    HttpStatus.EXPECTATION_FAILED,
-                );
-            }
-
-            this.logger.log(`[TalesService] Batch transaction ${dto.suiTransactionDigest} was successful.`);
-
-            // 2. Build cover image URL from blob ID (using working aggregator URL)
-            const publisherBaseUrl = process.env.WALRUS_PUBLISHER_BASE_URL || 'https://aggregator.walrus-testnet.walrus.space/v1/blobs';
-            const coverImageWalrusUrl = `${publisherBaseUrl}/${dto.coverBlobId}`;
-
-            // 3. Create tale record with both blob IDs (new schema approach)
-            const newTaleData = {
-                title: dto.title,
-                description: dto.description,
-                blobId: dto.contentBlobId, // Legacy field - points to content blob for backward compatibility
-                contentBlobId: dto.contentBlobId, // NEW: Explicit content blob ID
-                coverImageBlobId: dto.coverBlobId, // NEW: Explicit cover blob ID  
-                coverImageWalrusUrl: coverImageWalrusUrl, // NEW: Built from cover blob ID
-                coverImageUrl: coverImageWalrusUrl, // Legacy field for backward compatibility
-                tags: dto.tags || [],
-                wordCount: dto.wordCount || 0,
-                readingTime: dto.readingTime || 1,
-                authorId: dto.userAddress,
-                suiTxDigest: dto.suiTransactionDigest,
-                // Note: No suiObjectId since batch upload only registers blobs,
-                // NFT creation will be a separate step in the future
+            const content = await this.walrusService.getContent(blobIdToUse);
+            this.logger.debug(`[TalesService] Successfully retrieved content for tale ${id}, length: ${content.length}`);
+            
+            const taleSummary = this.toTaleSummary(taleDoc);
+            return {
+                ...taleSummary,
+                content,
             };
-
-            this.logger.debug('[TalesService] Creating tale with data:', JSON.stringify(newTaleData, null, 2));
-
-            const createdTaleDoc = new this.taleModel(newTaleData);
-            const savedTaleDoc = await createdTaleDoc.save();
-            
-            this.logger.log(`[TalesService] Batch tale record saved to DB. ID: ${savedTaleDoc.id}`);
-            this.logger.log(`[TalesService] Cover Blob ID: ${dto.coverBlobId}, Content Blob ID: ${dto.contentBlobId}`);
-            
-            return this.mapToTaleSummary(savedTaleDoc);
-
         } catch (error) {
-            if (error instanceof HttpException) throw error;
-            this.logger.error(`[TalesService] Error in recordBatchPublication for txDigest ${dto.suiTransactionDigest}:`, error.stack);
+            this.logger.error(`[TalesService] Failed to get content from Walrus for tale ${id}:`, error);
             throw new HttpException(
-                `Failed to record batch publication for tx ${dto.suiTransactionDigest}: ${error.message}`,
-                HttpStatus.INTERNAL_SERVER_ERROR,
+                `Failed to retrieve tale content from Walrus: ${error.message}`,
+                HttpStatus.SERVICE_UNAVAILABLE
             );
         }
     }
