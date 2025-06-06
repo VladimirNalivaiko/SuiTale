@@ -14,6 +14,8 @@ export interface TaleSummary {
     coverImageUrl?: string;
     coverImageBlobId?: string;
     coverImageWalrusUrl?: string;
+    contentBackup?: string;
+    coverImageBase64?: string;
     tags: string[];
     wordCount: number;
     readingTime: number;
@@ -47,6 +49,8 @@ export class TalesService {
             coverImageUrl: taleDoc.coverImageUrl,
             coverImageBlobId: taleDoc.coverImageBlobId,
             coverImageWalrusUrl: taleDoc.coverImageWalrusUrl,
+            contentBackup: taleDoc.contentBackup,
+            coverImageBase64: taleDoc.coverImageBase64,
             tags: taleDoc.tags,
             wordCount: taleDoc.wordCount,
             readingTime: taleDoc.readingTime,
@@ -100,7 +104,7 @@ export class TalesService {
                 }
             }
 
-            const newTaleData = {
+            const newTaleData: any = {
                 title: taleDataForRecord.title,
                 description: taleDataForRecord.description,
                 blobId: taleDataForRecord.contentBlobId, // Required field - use contentBlobId as main blob ID
@@ -115,6 +119,21 @@ export class TalesService {
                 suiTxDigest: txDigest,
                 suiObjectId: suiObjectId, // May be undefined if not found
             };
+
+            // Use backup data directly from frontend instead of downloading from Walrus
+            if (taleDataForRecord.contentBackup) {
+                newTaleData.contentBackup = taleDataForRecord.contentBackup;
+                this.logger.log(`[TalesService] Content backup received from frontend, size: ${taleDataForRecord.contentBackup.length} chars`);
+            } else {
+                this.logger.warn(`[TalesService] No content backup provided by frontend`);
+            }
+            
+            if (taleDataForRecord.coverImageBase64) {
+                newTaleData.coverImageBase64 = taleDataForRecord.coverImageBase64;
+                this.logger.log(`[TalesService] Cover backup received from frontend, size: ${taleDataForRecord.coverImageBase64.length} chars`);
+            } else {
+                this.logger.warn(`[TalesService] No cover image backup provided by frontend`);
+            }
 
             this.logger.debug('[TalesService] Creating new tale document with data:', JSON.stringify(newTaleData, null, 2));
 
@@ -148,29 +167,39 @@ export class TalesService {
             throw new HttpException(`Tale with ID ${id} not found`, HttpStatus.NOT_FOUND);
         }
 
-        // Get content from Walrus using the content blob ID (or fallback to main blobId)
-        const blobIdToUse = taleDoc.contentBlobId || taleDoc.blobId;
-        if (!blobIdToUse) {
-            throw new HttpException(`Tale ${id} has no content blob ID`, HttpStatus.NOT_FOUND);
-        }
+        let content: string;
 
-        this.logger.debug(`[TalesService] Fetching content from Walrus with blobId: ${blobIdToUse}`);
-        
-        try {
-            const content = await this.walrusService.getContent(blobIdToUse);
-            this.logger.debug(`[TalesService] Successfully retrieved content for tale ${id}, length: ${content.length}`);
-            
-            const taleSummary = this.toTaleSummary(taleDoc);
-            return {
-                ...taleSummary,
-                content,
-            };
-        } catch (error) {
-            this.logger.error(`[TalesService] Failed to get content from Walrus for tale ${id}:`, error);
+        // Only use database backup - no Walrus fallback
+        if (taleDoc.contentBackup) {
+            content = taleDoc.contentBackup;
+            this.logger.debug(`[TalesService] Content loaded from database backup for tale ${id}, size: ${content.length}`);
+        } else {
+            // No backup available - return error
+            this.logger.warn(`[TalesService] No content backup available for tale ${id}`);
             throw new HttpException(
-                `Failed to retrieve tale content from Walrus: ${error.message}`,
-                HttpStatus.SERVICE_UNAVAILABLE
+                `Content not available: no backup stored for tale ${id}`,
+                HttpStatus.NOT_FOUND
             );
         }
+        
+        const taleSummary = this.toTaleSummary(taleDoc);
+        return {
+            ...taleSummary,
+            content,
+        };
     }
+
+    async getTale(id: string): Promise<TaleSummary> {
+        const taleDoc = await this.taleModel.findById(id).exec();
+        if (!taleDoc) {
+            throw new HttpException(`Tale with ID ${id} not found`, HttpStatus.NOT_FOUND);
+        }
+        return this.toTaleSummary(taleDoc);
+    }
+
+    getWalrusUrl(blobId: string): string {
+        return this.walrusService.getWalrusUrl(blobId);
+    }
+
+
 }

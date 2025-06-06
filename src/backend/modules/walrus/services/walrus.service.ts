@@ -216,6 +216,13 @@ export class WalrusService {
     }
 
     /**
+     * Get Walrus URL for blob ID
+     */
+    getWalrusUrl(blobId: string): string {
+        return `https://aggregator.walrus-testnet.walrus.space/v1/blobs/${blobId}`;
+    }
+
+    /**
      * Exchange SUI tokens for WAL tokens using Walrus exchange
      * This method is exposed via API for testing/admin purposes
      */

@@ -79,6 +79,8 @@ export interface TaleDataForRecord {
   contentBlobId: string; // Restored from blobId - for main content
   coverBlobId: string; // Added separate field for cover blob ID
   coverImageUrl?: string; // Keep as optional Walrus URL
+  contentBackup?: string; // Backup of the tale content as plain text
+  coverImageBase64?: string; // Backup of the cover image as base64 string
   tags: string[];
   wordCount: number;
   readingTime: number;

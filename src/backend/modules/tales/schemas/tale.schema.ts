@@ -77,6 +77,20 @@ export class Tale extends Document {
     })
     content?: string;
 
+    @Prop()
+    @ApiProperty({
+        description: 'Backup copy of the full HTML content stored in database',
+        required: false,
+    })
+    contentBackup?: string;
+
+    @Prop()
+    @ApiProperty({
+        description: 'Base64 encoded cover image backup stored in database',
+        required: false,
+    })
+    coverImageBase64?: string;
+
     @Prop({ type: [String], default: [] })
     @ApiProperty({
         description: 'Array of tags associated with the tale',

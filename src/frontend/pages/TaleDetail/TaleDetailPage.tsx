@@ -5,6 +5,7 @@ import { ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { DefaultLayout } from '../../layouts';
 import { useTaleWithContent } from '../../hooks/useTales';
 import { TaleWithContent } from '../../api/tales.api';
+import { SmartTaleImage } from '../../components/SmartTaleImage';
 
 // Skeleton Component for Tale Detail Page
 const TaleDetailSkeleton: React.FC = () => (
@@ -118,20 +119,17 @@ const TaleDetailPage: React.FC = () => {
         </Button>
         
         <Paper elevation={3} sx={{ p: { xs: 2, sm: 3, md: 4 }, backgroundColor: 'background.paper' /* Ensuring Paper uses theme color */ }}>
-          {tale.coverImage && (
-            <Box
-              component="img"
-              src={tale.coverImage}
-              alt={tale.title}
-              sx={{
-                width: '100%',
-                maxHeight: '400px',
-                objectFit: 'cover',
-                borderRadius: '4px',
-                mb: 3,
-              }}
-            />
-          )}
+          <SmartTaleImage 
+            tale={tale}
+            alt={tale.title}
+            sx={{
+              width: '100%',
+              maxHeight: '400px',
+              objectFit: 'cover',
+              borderRadius: '4px',
+              mb: 3,
+            }}
+          />
           <Typography variant="h3" component="h1" gutterBottom>
             {tale.title}
           </Typography>

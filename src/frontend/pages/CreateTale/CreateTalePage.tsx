@@ -419,6 +419,31 @@ const CreateTalePage: React.FC = () => {
             await new Promise(resolve => setTimeout(resolve, retryDelay));
           }
 
+          // Prepare content backup from editor
+          const contentBackup = editor?.getHTML() || '';
+          
+          // Prepare cover image backup as base64
+          let coverImageBase64: string = '';
+          if (coverImageFile) {
+            try {
+              const reader = new FileReader();
+              const readPromise = new Promise<string>((resolve, reject) => {
+                reader.onload = () => {
+                  const result = reader.result as string;
+                  // Remove data:image/xxx;base64, prefix if present
+                  const base64Data = result.includes(',') ? result.split(',')[1] : result;
+                  resolve(base64Data);
+                };
+                reader.onerror = reject;
+              });
+              reader.readAsDataURL(coverImageFile);
+              coverImageBase64 = await readPromise;
+              console.log(`[CreateTalePage] Cover image backup prepared, size: ${coverImageBase64.length} chars`);
+            } catch (error) {
+              console.warn('[CreateTalePage] Failed to create cover image backup:', error);
+            }
+          }
+
           const taleRecord = await talesApi.recordPublication({
             txDigest: nftResult.digest,
             taleDataForRecord: {
@@ -427,6 +452,8 @@ const CreateTalePage: React.FC = () => {
               contentBlobId: walrusResult.contentBlobId,
               coverBlobId: walrusResult.coverBlobId,
               coverImageUrl: walrusService.getWalrusUrl(walrusResult.coverBlobId),
+              contentBackup, // Add content backup from editor
+              coverImageBase64, // Add cover image backup as base64
               tags: tags,
               wordCount: wordCount || 0,
               readingTime: readingTime || 1,

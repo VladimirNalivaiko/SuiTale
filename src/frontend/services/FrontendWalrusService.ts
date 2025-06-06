@@ -53,7 +53,7 @@ const WALRUS_CONFIG = {
     'https://walrus-testnet.blockdaemon.com:11444',
     'https://walrus-testnet-publisher.staketab.org:11444'
   ],
-  EPOCHS_AHEAD: 1,
+  EPOCHS_AHEAD: 3,
   WAL_PER_EPOCH_PER_MB: 0.000512, // Approximate cost
   SUI_TO_WAL_RATE: 1.0,
   GAS_BUDGET: 100_000_000, // 0.1 SUI in MIST

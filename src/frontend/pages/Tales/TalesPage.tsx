@@ -4,6 +4,7 @@ import { Box, Button, CircularProgress, Container, Grid, Typography, Alert, Skel
 import { DefaultLayout } from '../../layouts';
 import { useTales } from '../../hooks/useTales';
 import { TaleSummary } from '../../api/tales.api'; // Changed from Tale to TaleSummary
+import { SmartTaleImage } from '../../components/SmartTaleImage';
 
 const TALES_PER_PAGE = 12;
 
@@ -98,20 +99,17 @@ const TalesPage: React.FC = () => {
         }}
         onClick={() => onClick(String(tale.id))} 
       >
-        {tale.coverImageUrl && (
-          <Box
-            component="img"
-            src={tale.coverImageUrl}
-            alt={tale.title}
-            sx={{
-              width: '100%',
-              height: '150px', 
-              objectFit: 'cover',
-              borderRadius: '4px',
-              marginBottom: '12px',
-            }}
-          />
-        )}
+        <SmartTaleImage
+          tale={tale}
+          alt={tale.title}
+          sx={{
+            width: '100%',
+            height: '150px', 
+            objectFit: 'cover',
+            borderRadius: '4px',
+            marginBottom: '12px',
+          }}
+        />
         <Typography variant="h6" component="h3" gutterBottom sx={{ color: 'text.primary' }}>
           {tale.title}
         </Typography>

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsObject } from 'class-validator';
+import { IsNotEmpty, IsString, IsObject, IsOptional } from 'class-validator';
 
 // This structure should align with what prepareTalePublication returns in taleDataForRecord
 // For now, using a generic object. Consider defining a more specific class/interface if needed.
@@ -25,7 +25,18 @@ class TaleDataForRecordDto {
 
     @ApiProperty({ description: 'URL of the cover image (potentially from Walrus)', example: 'http://.../cover.jpg', required: false })
     @IsString()
+    @IsOptional()
     coverImageUrl?: string;
+
+    @ApiProperty({ description: 'Backup of the tale content as plain text', example: 'Once upon a time...', required: false })
+    @IsString()
+    @IsOptional()
+    contentBackup?: string;
+
+    @ApiProperty({ description: 'Backup of the cover image as base64 string', example: 'iVBORw0KGgoAAAANSUhEUgAA...', required: false })
+    @IsString()
+    @IsOptional()
+    coverImageBase64?: string;
 
     @ApiProperty({ description: 'Tags for the tale', example: ['sui', 'nft'], type: [String] })
     tags: string[];

@@ -71,6 +71,8 @@ export const useTaleWithContent = (
     queryKey: [...taleKeys.detail(id), 'content'],
     queryFn: () => talesApi.getTaleWithContent(id),
     enabled: !!id,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 10 * 60 * 1000,   // 10 minutes (was cacheTime)
     ...options,
   });
 };
