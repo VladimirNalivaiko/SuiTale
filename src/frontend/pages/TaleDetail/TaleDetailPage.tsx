@@ -6,6 +6,8 @@ import { DefaultLayout } from '../../layouts';
 import { useTaleWithContent } from '../../hooks/useTales';
 import { TaleWithContent } from '../../api/tales.api';
 import { SmartTaleImage } from '../../components/SmartTaleImage';
+import { ReadingProgressIndicator } from '../../components/ReadingProgressIndicator';
+import { useReadingProgress } from '../../hooks/useReadingProgress';
 
 // Skeleton Component for Tale Detail Page
 const TaleDetailSkeleton: React.FC = () => (
@@ -41,11 +43,24 @@ const TaleDetailPage: React.FC = () => {
   const navigate = useNavigate();
   
   // Removed the options object, relying on default behavior for undefined id in queryKey
-  const { data: tale, isLoading, error, isError } = useTaleWithContent(id!); 
+  const { data: tale, isLoading, error, isError } = useTaleWithContent(id!);
+  
+  // Reading progress tracking
+  const { progress, isComplete, estimatedTimeRemaining } = useReadingProgress(); 
 
   if (!id) {
     return (
       <DefaultLayout>
+        {/* Reading Progress Indicator */}
+        <ReadingProgressIndicator
+          progress={progress}
+          isComplete={isComplete}
+          estimatedTimeRemaining={estimatedTimeRemaining}
+          position="top"
+          showDetails={true}
+          minimumProgress={5}
+        />
+        
         <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="error">Tale ID is missing. Cannot load the tale.</Alert>
           <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
@@ -59,6 +74,16 @@ const TaleDetailPage: React.FC = () => {
   if (isLoading) {
     return (
       <DefaultLayout>
+        {/* Reading Progress Indicator */}
+        <ReadingProgressIndicator
+          progress={progress}
+          isComplete={isComplete}
+          estimatedTimeRemaining={estimatedTimeRemaining}
+          position="top"
+          showDetails={true}
+          minimumProgress={5}
+        />
+        
         <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Button 
             variant="outlined" 
@@ -77,6 +102,16 @@ const TaleDetailPage: React.FC = () => {
   if (isError && error) {
     return (
       <DefaultLayout>
+        {/* Reading Progress Indicator */}
+        <ReadingProgressIndicator
+          progress={progress}
+          isComplete={isComplete}
+          estimatedTimeRemaining={estimatedTimeRemaining}
+          position="top"
+          showDetails={true}
+          minimumProgress={5}
+        />
+        
         <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="error">
             Failed to load tale: {error instanceof Error ? error.message : 'An unknown error occurred.'}
@@ -92,6 +127,16 @@ const TaleDetailPage: React.FC = () => {
   if (!tale) {
     return (
       <DefaultLayout>
+        {/* Reading Progress Indicator */}
+        <ReadingProgressIndicator
+          progress={progress}
+          isComplete={isComplete}
+          estimatedTimeRemaining={estimatedTimeRemaining}
+          position="top"
+          showDetails={true}
+          minimumProgress={5}
+        />
+        
         <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
           <Alert severity="info">Tale not found.</Alert>
            <Button variant="outlined" onClick={() => navigate(-1)} startIcon={<ArrowBackIcon />} sx={{ mt: 2 }}>
@@ -108,6 +153,16 @@ const TaleDetailPage: React.FC = () => {
 
   return (
     <DefaultLayout>
+      {/* Reading Progress Indicator */}
+      <ReadingProgressIndicator
+        progress={progress}
+        isComplete={isComplete}
+        estimatedTimeRemaining={estimatedTimeRemaining}
+        position="top"
+        showDetails={true}
+        minimumProgress={5}
+      />
+      
       <Container maxWidth="md" sx={{ py: 4, backgroundColor: 'background.default' }}>
         <Button 
           variant="outlined" 
@@ -135,7 +190,11 @@ const TaleDetailPage: React.FC = () => {
           </Typography>
           
           <Box sx={{ mb: 2, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-            <Typography variant="caption" color="text.secondary">
+            <Typography 
+              variant="caption" 
+              color="text.secondary"
+              data-reading-time={tale.readingTime}
+            >
               Reading time: {tale.readingTime} min
             </Typography>
             <Typography variant="caption" color="text.secondary">
